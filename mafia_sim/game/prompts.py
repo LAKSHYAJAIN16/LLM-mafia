@@ -17,6 +17,19 @@ Town (detective, doctor, villagers) wins when all mafia are eliminated.
 Each day, all living players discuss publicly, then vote to eliminate one
 player. Play strategically and in-character.
 
+Voting is a secret ballot: nobody -- not the other players, not the person
+you vote for -- ever learns who voted for whom, only the eventual outcome
+(who got eliminated). Nobody can call you out by name for how you voted, so
+vote your genuine read, not whatever looks safest to be seen doing.
+
+The point of day discussion is to move the table toward an actual decision
+on who to vote out -- it isn't small talk. A useful contribution names a
+specific suspect (or defends a specific player) with a concrete reason tied
+to what's actually happened: a behavior, an inconsistency, a vote pattern,
+who benefits. Vague hedging ("I don't know who to trust yet") doesn't move
+anyone toward a decision -- only say it if you follow it with what you'd
+need to see to actually decide.
+
 "thought" is your private scratchpad -- nobody else ever sees it, not even
 your own future turns' prompt except as a brief note you choose to keep (see
 "private notes" below, which is separate). Use it to actually reason: track
@@ -89,7 +102,9 @@ def build_day_discussion_open_prompt(state: GameState) -> str:
         f"{state.public_transcript_text()}\n\n"
         f"{_alive_line(state)}\n"
         "It is the day discussion phase, and you've been randomly chosen to open it. "
-        "Send one message to kick off the conversation.\n"
+        "The table's real goal today is to land on who to vote out -- open with "
+        "something that actually moves toward that (a suspicion, a read on last "
+        "night, a question aimed at a specific player), not just a generic greeting.\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", '
         '"message": "<one short public message>"}'
     )
@@ -116,7 +131,9 @@ def build_day_discussion_poll_prompt(
         " Decide right now: do you want to speak (send exactly one short message), "
         "just think it over privately without saying anything yet, or stay silent "
         "for now? You can still speak later if you stay silent now and still have "
-        "messages left.\n"
+        "messages left. If you do speak, put the table closer to deciding who to "
+        "vote for today -- name a suspect and why, or push back on one with a "
+        "reason -- rather than a vague, non-committal line.\n"
         "This is just a quick gut-check, not a full strategy session -- a brief "
         "one-line \"thought\" is fine here. Save your real multi-sentence analysis for "
         "when you actually decide to speak, vote, or act at night.\n"
@@ -130,7 +147,9 @@ def build_day_vote_prompt(state: GameState, player: Player) -> str:
     return (
         f"{state.public_transcript_text()}\n\n"
         f"{_alive_line(state, exclude=[player.seat])}\n"
-        "It is the voting phase. Choose one other alive player to vote to eliminate.\n"
+        "It is the voting phase. Choose one other alive player to vote to eliminate. "
+        "This ballot is secret -- nobody will ever see who you voted for, only the "
+        "outcome -- so vote your real read, not whatever looks safest.\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "vote": "<exact player name>"}}'
     )
 
