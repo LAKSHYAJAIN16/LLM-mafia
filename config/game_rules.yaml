@@ -15,6 +15,13 @@ role_setups:
 reveal_role_on_death: false   # if true, everyone learns the role of anyone who died
 max_days: 12                  # safety cap; game is declared a draw if exceeded (also bounds worst-case token spend)
 
+# Hard per-game spending cap in USD. Checked before each new day/night, inside the
+# day-discussion polling loop, and before each showdown revote, so a single expensive
+# day can self-truncate instead of only being caught at the next day boundary -- the
+# game then ends early as a draw with a system message recording why, same as hitting
+# max_days. Set to null to disable (no cap).
+max_cost_usd: 1.00
+
 # Day discussion is an open floor, not a fixed speaking order: one random player
 # opens, then each turn taps exactly one alive player with messages left (fairly
 # cycled, not everyone every turn) to decide whether to speak (exactly one message),

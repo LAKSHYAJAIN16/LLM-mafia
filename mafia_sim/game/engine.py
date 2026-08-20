@@ -59,6 +59,10 @@ class GameEngine:
 
         max_days = self.rules.get("max_days", 20)
         while state.day < max_days:
+            if self._budget_exceeded():
+                state.log_public("day", "system", self._budget_message())
+                return GameResult(state, None, state.day)
+
             state.day += 1
 
             self._run_night()
@@ -73,6 +77,17 @@ class GameEngine:
                 return GameResult(state, winner, state.day)
 
         return GameResult(state, None, state.day)
+
+    def _total_cost(self) -> float:
+        return sum(self.state.cost_usd.values())
+
+    def _budget_exceeded(self) -> bool:
+        cap = self.rules.get("max_cost_usd")
+        return bool(cap) and self._total_cost() >= cap
+
+    def _budget_message(self) -> str:
+        cap = self.rules.get("max_cost_usd")
+        return f"Game stopped early: cost cap (${cap:.2f}) reached (spent ${self._total_cost():.4f})."
 
     def _maybe_summarize_day(self, day: int) -> None:
         if not self.summarizer:
@@ -236,6 +251,8 @@ class GameEngine:
         queue: list = []
 
         while polls_used < max_polls:
+            if self._budget_exceeded():
+                break
             candidates = [p for p in state.alive_players() if budget[p.seat] > 0]
             if not candidates:
                 break
@@ -327,7 +344,7 @@ class GameEngine:
             if len(tied) == 1:
                 return tied[0]
 
-            if round_num >= max_rounds:
+            if round_num >= max_rounds or self._budget_exceeded():
                 if self.rules.get("tie_vote_policy", "random") == "no_elimination":
                     return None
                 return random.choice(tied)

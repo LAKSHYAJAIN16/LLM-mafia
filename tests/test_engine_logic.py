@@ -266,6 +266,29 @@ def test_discussion_treats_speak_with_no_message_as_a_pass():
     assert len(speeches) == 1
 
 
+def test_run_stops_early_once_the_cost_cap_is_reached():
+    roster = _mock_roster(8)
+    state, agents = setup_game(roster, player_count=8, role_setups=ROLE_SETUPS, rules=RULES)
+    state.add_cost("mock-0", 1.50)  # already over an intended $1 cap before the game even starts
+
+    rules = {**RULES, "max_cost_usd": 1.00}
+    engine = GameEngine(state, agents, rules)
+
+    result = engine.run()
+
+    assert result.winner is None
+    assert result.days == 0  # stopped before day 1 ever started
+    assert any("cost cap" in e.text for e in state.public_log)
+
+
+def test_budget_exceeded_is_false_when_cap_is_disabled():
+    state = GameState(players=_villagers(1))
+    state.add_cost("m", 999.0)
+    engine = GameEngine(state, {}, {"max_cost_usd": None})
+
+    assert engine._budget_exceeded() is False
+
+
 def test_summarizer_only_fires_once_a_day_ages_out_of_the_window():
     state = GameState(players=_villagers(4), transcript_full_detail_days=2)
     rules = {"request_timeout_seconds": 30}
