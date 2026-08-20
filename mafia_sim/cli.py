@@ -37,6 +37,8 @@ def _print_event(entry) -> None:
         print(f"[Night {entry.day}] (mafia) {entry.speaker}: {entry.text}")
     elif entry.kind == "thought":
         print(f"[Day {entry.day}]     ({entry.speaker} thinking) {entry.text}")
+    elif entry.kind == "reveal":
+        print(f"[Night {entry.day}]   ** {entry.text}")
     else:
         print(f"[Day {entry.day}] {entry.text}")
 

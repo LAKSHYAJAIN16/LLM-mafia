@@ -167,6 +167,9 @@ def test_doctor_gets_private_feedback_when_a_save_blocks_an_attack():
     doctor = state.get("Player2")
     assert any("saved them" in n for n in doctor.private_notes)
     assert any("No one died" in e.text for e in state.public_log)
+    # Spectator-only reveal: the human watching should see this happen too, without
+    # it ever reaching another player's prompt (it's in reveal_log, not public_log).
+    assert any("saved" in e.text and e.speaker == "Player2" for e in state.reveal_log)
 
 
 def test_doctor_gets_private_feedback_when_the_save_was_not_needed():
@@ -189,6 +192,100 @@ def test_doctor_gets_private_feedback_when_the_save_was_not_needed():
     assert state.get("Player3").alive is False
     doctor = state.get("Player2")
     assert any("No attack landed" in n for n in doctor.private_notes)
+    assert any("No attack landed" in e.text and e.speaker == "Player2" for e in state.reveal_log)
+
+
+def test_detective_investigation_is_revealed_to_spectators():
+    players = [
+        Player(seat="Player1", model_key="m", role=Role.MAFIA),
+        Player(seat="Player2", model_key="m", role=Role.DETECTIVE),
+        Player(seat="Player3", model_key="m", role=Role.VILLAGER),
+    ]
+    state = GameState(players=players)
+    state.day = 1
+    agents = {
+        "Player1": _FixedNightAgent("Player3"),
+        "Player2": _FixedNightAgent("Player3"),  # detective investigates Player3
+    }
+    rules = {"max_format_retries": 1, "reveal_role_on_death": False}
+    engine = GameEngine(state, agents, rules)
+
+    engine._run_night()
+
+    detective = state.get("Player2")
+    assert any("Player3" in n and "villager" in n for n in detective.private_notes)
+    # Spectator-only reveal, same treatment as the doctor's -- never leaks into
+    # public_transcript_text() since it's not in public_log.
+    reveal = [e for e in state.reveal_log if e.speaker == "Player2"]
+    assert len(reveal) == 1
+    assert "Player3" in reveal[0].text and "villager" in reveal[0].text
+    # The role reveal itself never leaks into the prompt-visible transcript, even
+    # though Player3's death (a separate, legitimately public event) does.
+    assert "villager" not in state.public_transcript_text()
+
+
+def test_vote_candidates_exclude_the_voter_themselves():
+    class RecordingAgent:
+        def __init__(self, vote_value: str):
+            self.vote_value = vote_value
+            self.seen_target_keys = None
+
+        def ask(self, state, system_prompt, user_prompt, required_keys, target_keys=None, seat=None, purpose=""):
+            self.seen_target_keys = target_keys
+            return {"thought": "", "vote": self.vote_value}
+
+    state = GameState(players=_villagers(3))
+    state.day = 1
+    agents = {
+        "Player1": RecordingAgent("Player2"),
+        "Player2": RecordingAgent("Player1"),
+        "Player3": RecordingAgent("Player1"),
+    }
+    engine = GameEngine(state, agents, {"max_format_retries": 1})
+
+    engine._collect_votes(["Player1", "Player2", "Player3"], round_num=1)
+
+    for seat, agent in agents.items():
+        assert seat not in agent.seen_target_keys["vote"]
+
+
+def test_addressed_players_jump_the_discussion_queue(monkeypatch):
+    import mafia_sim.game.engine as engine_module
+
+    monkeypatch.setattr(engine_module.random, "choice", lambda seq: seq[0])
+    monkeypatch.setattr(engine_module.random, "shuffle", lambda seq: None)
+
+    state = GameState(players=_villagers(4))
+    call_order: list[str] = []
+
+    class RecordingAgent:
+        def __init__(self, opening_message: str | None = None):
+            self.opening_message = opening_message
+
+        def ask(self, state, system_prompt, user_prompt, required_keys, target_keys=None, seat=None, purpose=""):
+            call_order.append(seat)
+            if purpose == "day_discussion_open":
+                return {"thought": "", "message": self.opening_message or "just opening"}
+            return {"thought": "", "action": "pass", "message": ""}
+
+    agents = {
+        "Player1": RecordingAgent(opening_message="Player4, what do you think?"),
+        "Player2": RecordingAgent(),
+        "Player3": RecordingAgent(),
+        "Player4": RecordingAgent(),
+    }
+    rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100, "discussion_silence_threshold": 100}
+    engine = GameEngine(state, agents, rules)
+
+    engine._run_discussion()
+
+    # Player1 opens (random.choice patched to always pick the first alive player) and
+    # addresses Player4 by name. Without prioritization the unshuffled fair queue
+    # would ask Player2 next; with it, the addressed player jumps straight to the
+    # front of the line, like a real conversation giving the floor to whoever was
+    # just asked something.
+    assert call_order[0] == "Player1"
+    assert call_order[1] == "Player4"
 
 
 class ScriptedDiscussionAgent:
@@ -232,7 +329,9 @@ def test_discussion_ends_as_soon_as_everyone_passes():
     assert len(speeches) == 1  # only the forced opener; nobody else ever chose to speak
 
 
-def test_discussion_caps_a_talkative_player_at_three_messages_per_day():
+def test_discussion_caps_a_talkative_player_at_the_daily_message_limit():
+    from mafia_sim.game.engine import MAX_MESSAGES_PER_DAY
+
     state = GameState(players=_villagers(2))
     agents = {
         "Player1": ScriptedDiscussionAgent(action="speak", message="P1 talking"),
@@ -245,7 +344,7 @@ def test_discussion_caps_a_talkative_player_at_three_messages_per_day():
 
     p1_speeches = [e for e in state.public_log if e.speaker == "Player1"]
     p2_speeches = [e for e in state.public_log if e.speaker == "Player2"]
-    assert len(p1_speeches) == 3  # hit the daily cap, never more
+    assert len(p1_speeches) == MAX_MESSAGES_PER_DAY  # hit the daily cap, never more
     assert len(p2_speeches) <= 1  # only ever spoke if it happened to be the forced opener
 
 

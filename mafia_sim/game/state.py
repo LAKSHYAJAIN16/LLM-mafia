@@ -34,6 +34,7 @@ class GameState:
     mafia_log: list[LogEntry] = field(default_factory=list)
     thought_log: list[LogEntry] = field(default_factory=list)  # spectator-only private reasoning
     vote_log: list[LogEntry] = field(default_factory=list)  # spectator-only -- ballots are secret from players
+    reveal_log: list[LogEntry] = field(default_factory=list)  # spectator-only -- doctor save / detective investigation outcomes
     day: int = 0
     _seq: int = field(default=0, repr=False, compare=False)
     day_votes: list[dict] = field(default_factory=list)  # [{day, round, votes: {voter: target}}]
@@ -107,6 +108,17 @@ class GameState:
         # that feeds a player's prompt -- never reveals who voted for whom.
         entry = LogEntry(self.day, phase, "vote", speaker, text, seq=self._next_seq())
         self.vote_log.append(entry)
+        if self.on_event:
+            self.on_event(entry)
+
+    def log_reveal(self, phase: str, speaker: str, text: str) -> None:
+        # Spectator-only, like votes/thoughts: lets a human watching (console live
+        # feed or replay) see what the doctor's save actually did and what the
+        # detective actually learned, without that ever reaching another player's
+        # prompt -- the private_notes copy (see engine.py) is what the player
+        # themselves gets to act on.
+        entry = LogEntry(self.day, phase, "reveal", speaker, text, seq=self._next_seq())
+        self.reveal_log.append(entry)
         if self.on_event:
             self.on_event(entry)
 

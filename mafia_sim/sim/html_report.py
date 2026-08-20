@@ -43,6 +43,7 @@ button:hover { background: #343948; }
 .entry-mafia_chat { background: #241a1a; border-left: 3px solid #ff6b6b; }
 .entry-thought { background: transparent; border-left: 3px solid #4a4e5c; color: #9a9caa;
   font-style: italic; padding-top: 0.35rem; padding-bottom: 0.35rem; }
+.entry-reveal { background: #1a2420; border-left: 3px solid #6bcb77; color: #b8bacb; font-size: 0.85rem; }
 .entry-summary { background: #1a2024; border-left: 3px solid #6b8fd9; color: #b8bacb; font-size: 0.85rem; }
 .speaker { font-weight: 600; margin-right: 0.4rem; }
 .tag { font-size: 0.7rem; color: #b8bacb; margin-left: 0.4rem; }
@@ -79,6 +80,7 @@ _KIND_LABELS = {
     "speech": "speech",
     "vote": "vote",
     "system": "system",
+    "reveal": "outcome",
 }
 
 
@@ -110,6 +112,7 @@ def render_game_html(record: dict) -> str:
         *record.get("mafia_log", []),
         *record.get("thought_log", []),
         *record.get("vote_log", []),
+        *record.get("reveal_log", []),
     ]
     all_entries.sort(key=lambda e: e.get("seq", 0))
 

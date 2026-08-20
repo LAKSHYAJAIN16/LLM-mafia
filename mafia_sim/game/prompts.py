@@ -96,12 +96,11 @@ def build_day_discussion_poll_prompt(state: GameState, remaining_budget: int, ma
     )
 
 
-def build_day_vote_prompt(state: GameState) -> str:
+def build_day_vote_prompt(state: GameState, player: Player) -> str:
     return (
         f"{state.public_transcript_text()}\n\n"
-        f"{_alive_line(state)}\n"
-        "It is the voting phase. Choose one alive player to vote to eliminate "
-        "(you may vote for yourself only if you have no better option).\n"
+        f"{_alive_line(state, exclude=[player.seat])}\n"
+        "It is the voting phase. Choose one other alive player to vote to eliminate.\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "vote": "<exact player name>"}}'
     )
 
@@ -120,11 +119,11 @@ def build_day_showdown_defense_prompt(state: GameState, accused: list[str]) -> s
     )
 
 
-def build_day_showdown_vote_prompt(state: GameState, accused: list[str]) -> str:
-    options = ", ".join(accused)
+def build_day_showdown_vote_prompt(state: GameState, player: Player, accused: list[str]) -> str:
+    options = ", ".join(s for s in accused if s != player.seat) or ", ".join(accused)
     return (
         f"{state.public_transcript_text()}\n\n"
-        f"{_alive_line(state)}\n"
+        f"{_alive_line(state, exclude=[player.seat])}\n"
         f"Showdown revote: choose which of the tied players to eliminate ({options}).\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "vote": "<exact player name>"}}'
     )

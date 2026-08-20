@@ -34,6 +34,7 @@ class ResultsLogger:
             "mafia_log": [dataclasses.asdict(e) for e in state.mafia_log],
             "thought_log": [dataclasses.asdict(e) for e in state.thought_log],
             "vote_log": [dataclasses.asdict(e) for e in state.vote_log],
+            "reveal_log": [dataclasses.asdict(e) for e in state.reveal_log],
             "day_votes": state.day_votes,
             "day_summaries": state.day_summaries,
             "format_failures": state.format_failures,
