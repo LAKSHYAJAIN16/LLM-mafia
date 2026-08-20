@@ -74,6 +74,23 @@ def test_mafia_system_prompt_includes_their_own_night_chat_history():
     assert "Let's go with Player3, low risk pick." not in villager_text
 
 
+def test_detective_gets_a_claim_nudge_only_once_they_have_an_actual_result():
+    detective = Player(seat="Player1", model_key="m", role=Role.DETECTIVE)
+    villager = Player(seat="Player2", model_key="m", role=Role.VILLAGER, private_notes=["some note"])
+    state = GameState(players=[detective, villager])
+
+    # No investigation results yet -- nothing to weigh claiming, so no nudge.
+    assert "worthless to town" not in prompts.build_system_prompt(state, detective)
+
+    detective.private_notes.append("Night 1: you investigated Player2 -- they are villager. You now know this.")
+    text = prompts.build_system_prompt(state, detective)
+    assert "worthless to town" in text
+    assert "Decide deliberately whether and when" in text
+
+    # A non-detective with private notes (e.g. the doctor) never gets the detective framing.
+    assert "worthless to town" not in prompts.build_system_prompt(state, villager)
+
+
 def test_mafia_system_prompt_omits_chat_section_before_any_night_has_happened():
     players = [
         Player(seat="Player1", model_key="m", role=Role.MAFIA),

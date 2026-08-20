@@ -76,6 +76,18 @@ def build_system_prompt(state: GameState, player: Player) -> str:
             )
             lines.append(mafia_chat)
 
+    if player.role == Role.DETECTIVE and player.private_notes:
+        lines.append(
+            "As detective, your investigation results are worthless to town if you "
+            "never act on them -- staying quiet forever is the safest personal play "
+            "but often the worst team play. This doesn't mean claim on command: "
+            "weigh it like any other real decision (a false claim you can't back up "
+            "invites a mafia counter-claim, and going public paints a target on "
+            "you). But if you're sitting on a strong, decisive read -- especially a "
+            "confirmed mafia member -- silently taking that knowledge to your grave "
+            "helps no one. Decide deliberately whether and when it's worth surfacing."
+        )
+
     if player.private_notes:
         lines.append("Your private notes from previous nights:")
         lines.extend(f"- {n}" for n in player.private_notes)
