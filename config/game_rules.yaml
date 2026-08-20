@@ -67,14 +67,18 @@ tie_vote_policy: random       # 'random' or 'no_elimination' -- fallback once ma
 # size -- and cost -- grows roughly quadratically with game length.
 transcript_full_detail_days: 3
 
-# Optional: a roster key (from whichever --models file is in use) to use as a
-# dedicated day-summarizer -- never one of the models under evaluation. When
-# set, once a day's discussion ages out of the detail window above, it's
-# compressed into one sentence (see mafia_sim/game/summarizer.py) instead of
-# silently dropped, at the cost of one extra small call per day. Off by
-# default (null) since it's an extra real API call; only worth turning on for
-# games likely to run past transcript_full_detail_days.
-summarizer_model: null
+# A roster key (from whichever --models file is in use) to use as a dedicated
+# day-summarizer -- automatically excluded from player sampling (see
+# sim/tournament.py) so it's never also a participant under evaluation. Once a
+# day's discussion ages out of the detail window above, it's compressed into
+# one sentence (see mafia_sim/game/summarizer.py) instead of silently dropped,
+# at the cost of one extra small call per day -- cheap relative to the full
+# per-player-per-turn transcript resend it saves on every later call. Defaults
+# to gpt-5.4-mini-or, a cheap model already in the OpenRouter roster; if that
+# key isn't present in whichever --models file is active (e.g. models.yaml),
+# summarization just silently stays off for that run. Set to null to disable
+# outright.
+summarizer_model: gpt-5.4-mini-or
 
 # LLM call settings
 temperature: 0.9

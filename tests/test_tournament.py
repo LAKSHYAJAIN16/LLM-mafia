@@ -56,3 +56,18 @@ def test_setup_game_uses_vendor_diverse_roster():
     state, _agents = setup_game(roster, player_count=8, role_setups=ROLE_SETUPS, rules=RULES)
     vendors = [roster[p.model_key][0].vendor for p in state.players]
     assert len(vendors) == len(set(vendors))
+
+
+def test_setup_game_never_samples_the_excluded_summarizer_key():
+    vendor_counts = {f"vendor{i}": 1 for i in range(8)}
+    roster = _roster(vendor_counts)
+    summarizer_key = next(iter(roster))
+    for _ in range(20):
+        state, _agents = setup_game(
+            roster,
+            player_count=7,
+            role_setups={7: {"mafia": 2, "detective": 1, "doctor": 1}},
+            rules=RULES,
+            exclude_keys={summarizer_key},
+        )
+        assert summarizer_key not in {p.model_key for p in state.players}

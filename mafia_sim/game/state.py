@@ -162,27 +162,40 @@ class GameState:
         )
 
     def public_transcript_text(self) -> str:
-        # System events (deaths) and votes are compact and stay in full for the
-        # whole game; verbose "speech" entries older than the detail window are dropped
-        # so prompt size doesn't grow quadratically over a long game. If a day_summaries
-        # entry exists for a dropped day (opt-in, see sim/summarizer.py), one summary
-        # line stands in for that day's discussion instead of losing it entirely.
+        # System events (deaths, eliminations, showdown announcements) are pulled into
+        # their own leading "KEY FACTS" block instead of staying interleaved with
+        # chatter -- same information, same token cost, but a model skimming a long
+        # transcript sees the decision-relevant facts first instead of them being
+        # diluted among dozens of discussion lines. Facts always stay in full; verbose
+        # "speech" entries older than the detail window are dropped so prompt size
+        # doesn't grow quadratically over a long game. If a day_summaries entry exists
+        # for a dropped day (opt-in, see game/summarizer.py), one summary line stands
+        # in for that day's discussion instead of losing it entirely.
         cutoff = self.day - self.transcript_full_detail_days
-        lines = []
+        facts = []
+        discussion = []
         summarized_days: set[int] = set()
         for e in self.public_log:
-            if e.kind == "speech" and e.day < cutoff:
+            if e.kind == "system":
+                facts.append(f"[Day {e.day}] {e.text}")
+                continue
+            if e.day < cutoff:
                 if e.day not in summarized_days:
                     summarized_days.add(e.day)
                     summary = self.day_summaries.get(e.day)
                     if summary:
-                        lines.append(f"[Day {e.day}] Discussion summary: {summary}")
+                        discussion.append(f"[Day {e.day}] Discussion summary: {summary}")
                 continue
-            if e.kind == "system":
-                lines.append(f"[Day {e.day}] {e.text}")
-            else:
-                lines.append(f"[Day {e.day}] {e.speaker}: {e.text}")
-        return "\n".join(lines) if lines else "(no public events yet)"
+            discussion.append(f"[Day {e.day}] {e.speaker}: {e.text}")
+
+        if not facts and not discussion:
+            return "(no public events yet)"
+        parts = []
+        if facts:
+            parts.append("KEY FACTS (deaths, eliminations, and other game events, in order):\n" + "\n".join(facts))
+        if discussion:
+            parts.append("DISCUSSION:\n" + "\n".join(discussion))
+        return "\n\n".join(parts)
 
     def mafia_transcript_text(self) -> str:
         lines = []

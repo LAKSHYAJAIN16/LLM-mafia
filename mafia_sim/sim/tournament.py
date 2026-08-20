@@ -42,9 +42,15 @@ def _sample_model_keys(roster: Roster, player_count: int) -> list[str]:
 
 
 def setup_game(
-    roster: Roster, player_count: int, role_setups: dict, rules: dict, on_event=None
+    roster: Roster,
+    player_count: int,
+    role_setups: dict,
+    rules: dict,
+    on_event=None,
+    exclude_keys: set[str] | None = None,
 ) -> tuple[GameState, dict[str, PlayerAgent]]:
-    chosen = _sample_model_keys(roster, player_count)
+    playable = {k: v for k, v in roster.items() if k not in (exclude_keys or set())} or roster
+    chosen = _sample_model_keys(playable, player_count)
 
     role_counts = build_role_setup(player_count, role_setups)
     role_pool = []
@@ -83,9 +89,16 @@ def run_tournament(
     if summarizer_key and summarizer is None:
         print(f"[run] summarizer_model '{summarizer_key}' not in roster -- day summarization disabled")
 
+    # The summarizer model, if configured, is never sampled as a player -- it's meant
+    # to stay a disinterested compressor, not a participant under evaluation who'd
+    # also be reading its own (or a rival's) summarized-away history.
+    exclude_keys = {summarizer_key} if summarizer_key else set()
+
     results: list[GameResult] = []
     for i in range(num_games):
-        state, agents = setup_game(roster, player_count, role_setups, rules, on_event=on_event)
+        state, agents = setup_game(
+            roster, player_count, role_setups, rules, on_event=on_event, exclude_keys=exclude_keys
+        )
 
         if on_event:
             # Spectator-only reveal of which model is behind each seat -- sent straight

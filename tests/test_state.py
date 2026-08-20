@@ -36,6 +36,25 @@ def test_votes_are_secret_from_players_but_kept_for_spectators():
     assert state.vote_log[0].text == "Player1 votes for Player2"
 
 
+def test_transcript_pulls_system_facts_into_their_own_leading_block():
+    state = _state(day=1, full_detail_days=3)
+    state.log_public("day", "system", "Game begins.")
+    state.log_public("day", "speech", "I suspect Player2", speaker="Player1")
+    state.log_public("day", "system", "Player2 died.")
+
+    text = state.public_transcript_text()
+    facts_idx = text.index("KEY FACTS")
+    discussion_idx = text.index("DISCUSSION")
+    game_begins_idx = text.index("Game begins.")
+    player2_died_idx = text.index("Player2 died.")
+    suspect_idx = text.index("I suspect Player2")
+
+    # Both system events land inside the facts block, ahead of the discussion block.
+    assert facts_idx < game_begins_idx < discussion_idx
+    assert facts_idx < player2_died_idx < discussion_idx
+    assert discussion_idx < suspect_idx
+
+
 def test_all_speech_kept_within_detail_window():
     state = _state(day=2, full_detail_days=3)
     state.day = 1
