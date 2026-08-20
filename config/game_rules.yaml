@@ -10,7 +10,7 @@ role_setups:
   9:  { mafia: 2, detective: 1, doctor: 1 }
   10: { mafia: 3, detective: 1, doctor: 1 }
   12: { mafia: 3, detective: 1, doctor: 1 }
-  15: { mafia: 4, detective: 1, doctor: 1 }
+  15: { mafia: 3, detective: 1, doctor: 1 }
 
 # Game-flow settings
 reveal_role_on_death: false   # if true, everyone learns the role of anyone who died
