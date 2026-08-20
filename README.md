@@ -89,11 +89,17 @@ several things tuned to bound spend:
 - `max_cost_usd: 1.00` -- a hard per-game spending cap, checked between
   phases and inside the discussion/showdown loops, so one runaway game can't
   blow past it; the game just ends early as a draw if hit.
+- `max_cost_share_per_model: 0.5` -- guards against one model quietly
+  dominating spend (observed for real: one model, no errors, just expensive
+  per token, ate ~30% of a game's total cost on its own). Same early-end
+  treatment as `max_cost_usd` if any one model's cumulative cost crosses this
+  fraction of the game's total spend so far.
 - `max_days: 12` caps the worst case in turns.
-- `discussion_silence_threshold: 4` ends a day's discussion after 4
+- `discussion_silence_threshold: 6` ends a day's discussion after 6
   consecutive declines in a row rather than polling every remaining player
   every time -- the main lever against the open-floor discussion getting
-  expensive on quiet days.
+  expensive on quiet days -- with one floor: nobody alive goes a whole day
+  without at least one turn, even if the room "goes quiet" by this rule first.
 - `transcript_full_detail_days: 3` -- older day-by-day discussion text is
   dropped from the prompt (deaths stay for the whole game since they're short
   and strategically important), so prompt size doesn't grow quadratically

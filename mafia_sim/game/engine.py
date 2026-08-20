@@ -22,6 +22,7 @@ class GameResult:
 
 MAX_MESSAGES_PER_TURN = 3  # burst cap for night mafia chat and showdown defense turns
 MAX_MESSAGES_PER_DAY = 5  # per-player daily budget for the open-floor day discussion
+MIN_COST_FOR_SHARE_CHECK = 0.05  # don't judge cost-share until total spend is past pocket-change noise
 
 
 def _extract_messages(reply: dict) -> list[str]:
@@ -100,12 +101,35 @@ class GameEngine:
         return sum(self.state.cost_usd.values())
 
     def _budget_exceeded(self) -> bool:
+        return self._budget_exceeded_reason() is not None
+
+    def _budget_exceeded_reason(self) -> str | None:
+        total = self._total_cost()
+
         cap = self.rules.get("max_cost_usd")
-        return bool(cap) and self._total_cost() >= cap
+        if cap and total >= cap:
+            return f"cost cap (${cap:.2f}) reached (spent ${total:.4f})"
+
+        # A single expensive model dominating spend is its own failure mode, distinct
+        # from the game as a whole running long -- observed in a real game where one
+        # model (well-formed responses, no retries, just expensive per token) alone
+        # accounted for ~30% of that game's entire budget. MIN_COST_FOR_SHARE_CHECK
+        # guards against one early call looking like "100% of total" when total is
+        # still a few cents and hasn't had a chance to even out yet.
+        share_cap = self.rules.get("max_cost_share_per_model")
+        if share_cap and total >= MIN_COST_FOR_SHARE_CHECK and self.state.cost_usd:
+            worst_model, worst_cost = max(self.state.cost_usd.items(), key=lambda kv: kv[1])
+            share = worst_cost / total
+            if share > share_cap:
+                return (
+                    f"{worst_model} alone reached {share:.0%} of total spend "
+                    f"(cap {share_cap:.0%}, ${worst_cost:.4f} of ${total:.4f})"
+                )
+
+        return None
 
     def _budget_message(self) -> str:
-        cap = self.rules.get("max_cost_usd")
-        return f"Game stopped early: cost cap (${cap:.2f}) reached (spent ${self._total_cost():.4f})."
+        return f"Game stopped early: {self._budget_exceeded_reason()}."
 
     def _maybe_summarize_day(self, day: int) -> None:
         if not self.summarizer:
@@ -257,11 +281,16 @@ class GameEngine:
         fairly through everyone still eligible. A real conversation doesn't poll every
         participant before concluding the room's gone quiet, so discussion ends as
         soon as discussion_silence_threshold consecutive taps in a row produce no
-        speaker -- not only once literally everyone has individually declined. This is
-        also the main cost lever: the expensive case was always the tail end of a day,
-        burning one call per remaining player just to confirm nobody had anything left
-        to add. max_discussion_polls_per_day is a hard safety backstop, not expected
-        to bind in normal play.
+        speaker -- not only once literally everyone has individually declined -- with
+        one floor: nobody alive can be shut out of a whole day without a single turn.
+        If the room goes quiet while someone still hasn't been polled even once today
+        (observed in a real 15-player game: two players locked in a back-and-forth
+        kept getting priority all day, and a third player never got asked once), they
+        get the floor before the day is allowed to end. This is also the main cost
+        lever: the expensive case was always the tail end of a day, burning one call
+        per remaining player just to confirm nobody had anything left to add.
+        max_discussion_polls_per_day is a hard safety backstop, not expected to bind
+        in normal play.
         """
         state = self.state
         alive = state.alive_players()
@@ -280,6 +309,7 @@ class GameEngine:
         polls_used = 0
         consecutive_quiet = 0
         queue: list = []
+        polled_today: set[str] = {opener.seat}
 
         while polls_used < max_polls:
             if self._budget_exceeded():
@@ -289,26 +319,38 @@ class GameEngine:
                 break
 
             by_seat = {c.seat: c for c in candidates}
+            never_polled = [c for c in candidates if c.seat not in polled_today]
             next_player = None
-            while priority:
-                seat = priority.pop(0)
-                if seat in by_seat:
-                    next_player = by_seat[seat]
-                    break
-                addressed_by.pop(seat, None)  # no longer eligible -- drop the stale nudge
-            if next_player is not None:
+
+            if consecutive_quiet >= quiet_limit and never_polled:
+                # The room's gone quiet by the normal rule, but someone alive still
+                # hasn't had a single turn today -- give them the floor before the day
+                # is allowed to end, so two players dominating a back-and-forth can't
+                # shut a third voice out entirely.
+                next_player = never_polled[0]
                 queue = [q for q in queue if q.seat != next_player.seat]
+                priority = [s for s in priority if s != next_player.seat]
             else:
-                # Refill the turn-taking queue (a fair, reshuffled cycle through
-                # everyone still eligible) whenever it's empty or references someone
-                # who's since used up their daily budget.
-                queue = [q for q in queue if budget[q.seat] > 0]
-                if not queue:
-                    queue = candidates[:]
-                    random.shuffle(queue)
-                next_player = queue.pop(0)
+                while priority:
+                    seat = priority.pop(0)
+                    if seat in by_seat:
+                        next_player = by_seat[seat]
+                        break
+                    addressed_by.pop(seat, None)  # no longer eligible -- drop the stale nudge
+                if next_player is not None:
+                    queue = [q for q in queue if q.seat != next_player.seat]
+                else:
+                    # Refill the turn-taking queue (a fair, reshuffled cycle through
+                    # everyone still eligible) whenever it's empty or references someone
+                    # who's since used up their daily budget.
+                    queue = [q for q in queue if budget[q.seat] > 0]
+                    if not queue:
+                        queue = candidates[:]
+                        random.shuffle(queue)
+                    next_player = queue.pop(0)
 
             polls_used += 1
+            polled_today.add(next_player.seat)
             nudge = addressed_by.pop(next_player.seat, None)
             msg = self._poll_speak(next_player, budget, addressed_by=nudge)
             if msg is not None:
@@ -316,7 +358,8 @@ class GameEngine:
                 self._note_mentions(msg, next_player.seat, budget.keys(), priority, addressed_by)
             else:
                 consecutive_quiet += 1
-                if consecutive_quiet >= quiet_limit:
+                still_never_polled = any(c.seat not in polled_today for c in state.alive_players() if budget[c.seat] > 0)
+                if consecutive_quiet >= quiet_limit and not still_never_polled:
                     break
 
     @staticmethod

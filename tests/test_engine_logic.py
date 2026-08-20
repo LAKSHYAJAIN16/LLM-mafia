@@ -296,6 +296,31 @@ def test_addressed_players_jump_the_discussion_queue(monkeypatch):
     assert "Player4, what do you think?" in player4_prompt
 
 
+def test_discussion_guarantees_everyone_gets_polled_at_least_once_per_day():
+    # Regression for a real 15-player game: a player who was never addressed by
+    # name went the entire day without a single poll, because the silence
+    # threshold ended the day before the fair rotation ever reached them.
+    state = GameState(players=_villagers(3))
+    call_order: list[str] = []
+
+    class RecordingAgent:
+        def ask(self, state, system_prompt, user_prompt, required_keys, target_keys=None, seat=None, purpose=""):
+            call_order.append(seat)
+            if purpose == "day_discussion_open":
+                return {"thought": "", "message": "opening, nobody mentioned by name"}
+            return {"thought": "", "action": "pass", "message": ""}
+
+    agents = {"Player1": RecordingAgent(), "Player2": RecordingAgent(), "Player3": RecordingAgent()}
+    # discussion_silence_threshold=1 means the OLD behavior would end the day after
+    # the very first pass -- before the fair queue could reach whoever's third.
+    rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100, "discussion_silence_threshold": 1}
+    engine = GameEngine(state, agents, rules)
+
+    engine._run_discussion()
+
+    assert set(call_order) == {"Player1", "Player2", "Player3"}
+
+
 class ScriptedDiscussionAgent:
     """Test double for day discussion: always speaks (with a fixed message) when
     chosen as the forced opener, and returns a fixed action/message on every poll
@@ -392,6 +417,41 @@ def test_budget_exceeded_is_false_when_cap_is_disabled():
     state = GameState(players=_villagers(1))
     state.add_cost("m", 999.0)
     engine = GameEngine(state, {}, {"max_cost_usd": None})
+
+    assert engine._budget_exceeded() is False
+
+
+def test_run_stops_early_when_one_model_dominates_spend():
+    roster = _mock_roster(8)
+    state, agents = setup_game(roster, player_count=8, role_setups=ROLE_SETUPS, rules=RULES)
+    # One model way out ahead of the rest -- 90% of a real total, well past the cap.
+    state.add_cost("mock-0", 0.45)
+    state.add_cost("mock-1", 0.05)
+
+    rules = {**RULES, "max_cost_usd": None, "max_cost_share_per_model": 0.5}
+    engine = GameEngine(state, agents, rules)
+
+    result = engine.run()
+
+    assert result.winner is None
+    assert result.days == 0
+    assert any("mock-0" in e.text and "%" in e.text for e in state.public_log)
+
+
+def test_cost_share_check_ignores_pocket_change_totals():
+    # A single call before spend has evened out shouldn't look like "one model
+    # took 100%" and trip the game to a halt three seconds in.
+    state = GameState(players=_villagers(1))
+    state.add_cost("mock-0", 0.001)
+    engine = GameEngine(state, {}, {"max_cost_share_per_model": 0.5})
+
+    assert engine._budget_exceeded() is False
+
+
+def test_cost_share_check_is_off_by_default_when_unset():
+    state = GameState(players=_villagers(1))
+    state.add_cost("mock-0", 1.0)
+    engine = GameEngine(state, {}, {"max_cost_share_per_model": None})
 
     assert engine._budget_exceeded() is False
 
