@@ -1,0 +1,410 @@
+.page {
+  --ink: #f4ecd8;
+  --ground: #07090a;
+  --felt: #0c2e22;
+  --felt-bright: #12513a;
+  --neon-pink: #ff2e88;
+  --neon-pink-soft: #ff87bb;
+  --gold: #e0b24a;
+  --gold-bright: #f7d478;
+  --oxblood: #c8203f;
+  --card-cream: #f2ead3;
+
+  background: var(--ground);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow-x: hidden;
+
+  /* Browser surfaces carry the design too. */
+  scrollbar-color: var(--gold) var(--ground);
+}
+
+.page ::selection {
+  background: var(--neon-pink);
+  color: var(--ground);
+}
+
+.page a:focus-visible,
+.page :focus-visible {
+  outline: 2px solid var(--gold-bright);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.page ::-webkit-scrollbar {
+  width: 12px;
+}
+
+.page ::-webkit-scrollbar-track {
+  background: var(--ground);
+}
+
+.page ::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--gold), #a67f2e);
+  border-radius: 6px;
+  border: 2px solid var(--ground);
+}
+
+/* ============================= TICKER ============================= */
+
+.ticker {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #12160f 0%, #0a0c09 100%);
+  border-bottom: 1px solid rgba(224, 178, 74, 0.35);
+}
+
+.tickerTrack {
+  display: flex;
+  width: max-content;
+  animation: tickerScroll 26s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tickerTrack {
+    animation: none;
+  }
+}
+
+@keyframes tickerScroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.tickerRun {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tickerItem {
+  padding: 0.6rem 1.5rem;
+  font-family: var(--font-ledger), ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  white-space: nowrap;
+  color: var(--gold);
+}
+
+.tickerItem::after {
+  content: "\2660";
+  margin-left: 1.5rem;
+  color: var(--neon-pink);
+  letter-spacing: normal;
+}
+
+/* ============================= HERO ============================= */
+
+.hero {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 4rem 1.25rem 3rem;
+  text-align: center;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.feltHaze {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(60% 55% at 50% 38%, var(--felt-bright) 0%, var(--felt) 38%, transparent 72%),
+    radial-gradient(120% 80% at 50% 100%, #061913 0%, var(--ground) 60%),
+    var(--ground);
+}
+
+.smokeLayer {
+  position: absolute;
+  inset: -10%;
+  z-index: -1;
+  opacity: 0.35;
+  background-image:
+    radial-gradient(35% 25% at 15% 20%, rgba(244, 236, 216, 0.06), transparent 70%),
+    radial-gradient(30% 20% at 85% 15%, rgba(244, 236, 216, 0.05), transparent 70%),
+    radial-gradient(40% 30% at 60% 85%, rgba(244, 236, 216, 0.04), transparent 70%);
+  filter: blur(4px);
+  animation: drift 26s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .smokeLayer {
+    animation: none;
+  }
+}
+
+@keyframes drift {
+  from {
+    transform: translate3d(-2%, -1%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(2%, 1.5%, 0) scale(1.05);
+  }
+}
+
+.marqueeWord {
+  margin: 0;
+  font-family: var(--font-marquee), "Arial Black", sans-serif;
+  font-weight: 400;
+  font-size: clamp(2.6rem, 10vw, 6rem);
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.15em;
+}
+
+.marqueeLetter {
+  color: var(--ink);
+  text-shadow:
+    0 0 6px rgba(244, 236, 216, 0.9),
+    0 0 18px rgba(255, 46, 136, 0.55),
+    0 0 46px rgba(255, 46, 136, 0.35);
+  animation: neonFlicker 5.5s ease-in-out infinite;
+}
+
+.marqueeAccent {
+  color: var(--neon-pink-soft);
+  text-shadow:
+    0 0 6px rgba(255, 135, 187, 0.95),
+    0 0 20px rgba(255, 46, 136, 0.8),
+    0 0 56px rgba(255, 46, 136, 0.5);
+  animation-delay: 0.9s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marqueeLetter {
+    animation: none;
+  }
+}
+
+@keyframes neonFlicker {
+  0%, 3%, 6%, 100% {
+    opacity: 1;
+  }
+  4% {
+    opacity: 0.55;
+  }
+  5% {
+    opacity: 0.92;
+  }
+  52% {
+    opacity: 1;
+  }
+  53% {
+    opacity: 0.7;
+  }
+  54% {
+    opacity: 1;
+  }
+}
+
+.tagline {
+  margin: 0;
+  max-width: 34rem;
+  font-size: clamp(1rem, 2.4vw, 1.25rem);
+  line-height: 1.6;
+  color: rgba(244, 236, 216, 0.85);
+}
+
+.taglineEm {
+  color: var(--gold-bright);
+  font-style: italic;
+}
+
+/* ---- dealt hand of cards ---- */
+
+.hand {
+  display: flex;
+  justify-content: center;
+  padding-block: 0.5rem 0.25rem;
+}
+
+.card {
+  --i: 0;
+  width: clamp(56px, 10vw, 84px);
+  aspect-ratio: 2 / 3;
+  margin-inline: clamp(-14px, -2.4vw, -8px);
+  border-radius: 0.5rem;
+  transform-origin: bottom center;
+  transform: rotate(calc((var(--i) - 2) * 9deg)) translateY(calc(abs(var(--i) - 2) * 6px));
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.55);
+}
+
+.card:hover,
+.card:focus-visible {
+  transform: rotate(calc((var(--i) - 2) * 9deg)) translateY(calc(abs(var(--i) - 2) * 6px - 18px));
+  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.6), 0 0 22px rgba(255, 46, 136, 0.35);
+}
+
+.cardBack {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 0.5rem;
+  background:
+    repeating-linear-gradient(135deg, rgba(224, 178, 74, 0.22) 0 6px, transparent 6px 12px),
+    linear-gradient(155deg, #7a0f28 0%, #4c0a1a 60%, #2c0510 100%);
+  border: 2px solid rgba(224, 178, 74, 0.6);
+}
+
+.cardUp {
+  z-index: 2;
+}
+
+.cardFace {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+  padding: 0.4rem;
+  border-radius: 0.5rem;
+  background: var(--card-cream);
+  border: 2px solid rgba(10, 10, 10, 0.15);
+  color: #14100a;
+  font-family: var(--font-ledger), ui-monospace, monospace;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.cardFace.red {
+  color: var(--oxblood);
+}
+
+.cardRank {
+  align-self: flex-start;
+  font-size: clamp(0.85rem, 2vw, 1.1rem);
+}
+
+.cardSuitBig {
+  font-size: clamp(1.4rem, 3.4vw, 2rem);
+}
+
+/* ---- chip CTA ---- */
+
+.chipButton {
+  --chip-size: 9.5rem;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--chip-size);
+  height: var(--chip-size);
+  margin-top: 0.75rem;
+  border-radius: 50%;
+  text-decoration: none;
+  color: var(--ink);
+  isolation: isolate;
+}
+
+.chipRing {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(var(--card-cream) 0deg 14deg, var(--oxblood) 14deg 28deg);
+  box-shadow:
+    0 0 0 6px var(--ground),
+    0 0 0 8px var(--gold),
+    0 10px 26px rgba(0, 0, 0, 0.55),
+    0 0 30px rgba(255, 46, 136, 0.28);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.chipRing::before {
+  content: "";
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #1a0812, #2c0510 70%);
+  box-shadow: inset 0 0 0 2px rgba(224, 178, 74, 0.7);
+}
+
+.chipButton:hover .chipRing,
+.chipButton:focus-visible .chipRing {
+  transform: scale(1.05) rotate(6deg);
+  box-shadow:
+    0 0 0 6px var(--ground),
+    0 0 0 8px var(--gold-bright),
+    0 14px 30px rgba(0, 0, 0, 0.6),
+    0 0 48px rgba(255, 46, 136, 0.55);
+}
+
+.chipLabel {
+  position: relative;
+  z-index: 1;
+  max-width: 6.4rem;
+  font-family: var(--font-marquee), sans-serif;
+  font-size: 0.85rem;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--gold-bright);
+  text-shadow: 0 0 10px rgba(255, 46, 136, 0.55);
+}
+
+/* ============================= FOOTER ============================= */
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3.5rem 1.25rem 4rem;
+  background: #050706;
+  border-top: 1px solid rgba(224, 178, 74, 0.2);
+  text-align: center;
+}
+
+.footerLine {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.footerLink {
+  font-family: var(--font-marquee), sans-serif;
+  font-size: 1rem;
+  color: var(--gold-bright);
+  text-decoration: none;
+  text-shadow: 0 0 12px rgba(224, 178, 74, 0.3);
+}
+
+.footerLink:hover {
+  color: var(--neon-pink-soft);
+  text-shadow: 0 0 14px rgba(255, 46, 136, 0.5);
+}
+
+/* ============================= RESPONSIVE ============================= */
+
+@media (max-width: 640px) {
+  .hero {
+    gap: 1.5rem;
+    padding-top: 3rem;
+  }
+
+  .card {
+    width: clamp(46px, 14vw, 62px);
+    margin-inline: clamp(-16px, -4vw, -10px);
+  }
+
+  .chipButton {
+    --chip-size: 8rem;
+  }
+}
