@@ -18,6 +18,17 @@ export type BlogPost = {
 
 export const POSTS: BlogPost[] = [
   {
+    slug: "dynamic-speaking-rate-nudge",
+    date: "2026-08-20",
+    title: "An opt-in nudge based on a real research paper, off by default",
+    summary: "\"Time to Talk\" (Eckhaus et al. 2025) proposed biasing an agent's speak/stay-quiet decision by its share of recent messages -- added as a toggle, not a default.",
+    commits: [{ hash: "dcca4a8", message: "Add an opt-in dynamic speaking-rate nudge (off by default)" }],
+    body: [
+      "Read through \"Time to Talk: LLM Agents for Asynchronous Group Communication in Mafia Games\" (Eckhaus, Berger, Stanovsky -- EMNLP Findings 2025), which studies an LLM agent playing Mafia asynchronously alongside real humans. Most of its contributions don't transfer directly -- it's built around a live human audience (simulated typing delays, a human-vs-agent detection survey) that doesn't exist in an LLM-vs-LLM simulator -- but one idea is directly portable: its scheduler prompt is dynamically biased based on the agent's own talk rate relative to a fair 1/n share, nudging a quiet agent to speak up and a talkative one to listen more.",
+      "Added as GameEngine._speaking_rate_nudge(), which compares a player's share of today's messages so far against 1/n (n = players still in the discussion) and, if noticeably under or over, adds one sentence to that player's next poll prompt. Explicitly gated behind rules[\"dynamic_speaking_rate_nudge\"], defaulting to false -- so games play exactly as before unless it's turned on, per direct request rather than folding it into default behavior.",
+    ],
+  },
+  {
     slug: "removed-cost-share-cap",
     date: "2026-08-20",
     title: "Removed the per-model cost-share cap",
