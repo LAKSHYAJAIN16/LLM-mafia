@@ -21,6 +21,9 @@ class ModelSpec:
     api_key_env: str | None = None
     base_url: str | None = None
     enabled: bool = True
+    vendor: str = "unknown"  # company behind the model, e.g. "anthropic", "meta" -- used to
+    # keep any two models from the same company out of the same game (see tournament.py)
+    open_source: bool = False
 
     @property
     def has_api_key(self) -> bool:

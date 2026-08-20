@@ -19,7 +19,9 @@ def _mock_roster(n: int):
     roster = {}
     for i in range(n):
         key = f"mock-{i}"
-        spec = ModelSpec(key=key, display_name=key, provider="mock", model_id="mock-random")
+        spec = ModelSpec(
+            key=key, display_name=key, provider="mock", model_id="mock-random", vendor=f"vendor-{i}"
+        )
         roster[key] = (spec, build_provider(spec))
     return roster
 
