@@ -39,6 +39,15 @@ max_cost_usd: 2.00
 # cap is the real backstop against this getting expensive on a long/chatty game now.
 # max_discussion_polls_per_day is only a hard safety backstop, not expected to bind.
 max_messages_per_day: 4
+
+# Optional, off by default: nudges a player's poll prompt based on their share of
+# today's messages so far vs. a fair 1/n split (n = players still in the discussion) --
+# "you've been quiet, speak up" or "you've talked more than your share, let others in".
+# Inspired by the dynamic scheduler-prompt bias in Eckhaus et al. 2025 ("Time to Talk:
+# LLM Agents for Asynchronous Group Communication in Mafia Games"). Leave false to play
+# exactly as before -- this is a deliberate opt-in, not a default behavior change.
+dynamic_speaking_rate_nudge: false
+
 discussion_silence_threshold: 6
 max_discussion_polls_per_day: 1000
 

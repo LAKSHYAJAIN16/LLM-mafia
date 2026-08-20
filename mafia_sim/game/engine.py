@@ -364,6 +364,30 @@ class GameEngine:
                 priority.append(seat)
             addressed_by[seat] = (speaker_seat, text)
 
+    @staticmethod
+    def _speaking_rate_nudge(state: GameState, seat: str, participant_seats) -> str | None:
+        """Mirrors the dynamic scheduler-prompt bias from Eckhaus et al. 2025 ("Time
+        to Talk: LLM Agents for Asynchronous Group Communication in Mafia Games"):
+        nudge a player who's spoken less than their fair share (1/n) of today's
+        messages to speak up, and one who's spoken more than their fair share to
+        listen more. Opt-in via rules["dynamic_speaking_rate_nudge"] -- off by
+        default, so the game plays exactly as it does today unless explicitly
+        turned on.
+        """
+        today = [e for e in state.public_log if e.day == state.day and e.kind == "speech"]
+        total = len(today)
+        n = len(list(participant_seats))
+        if total == 0 or n == 0:
+            return None
+        fair_share = 1 / n
+        mine = sum(1 for e in today if e.speaker == seat)
+        rate = mine / total
+        if rate < fair_share * 0.5:
+            return "quiet"
+        if rate > fair_share * 1.5:
+            return "talkative"
+        return None
+
     def _speak_opening(self, p, budget: dict[str, int]) -> str:
         state = self.state
         reply = self.agents[p.seat].ask(
@@ -391,11 +415,14 @@ class GameEngine:
         spot, not just something they might notice buried in the transcript.
         """
         state = self.state
+        rate_nudge = None
+        if self.rules.get("dynamic_speaking_rate_nudge"):
+            rate_nudge = self._speaking_rate_nudge(state, p.seat, budget.keys())
         reply = self.agents[p.seat].ask(
             state,
             prompts.build_system_prompt(state, p),
             prompts.build_day_discussion_poll_prompt(
-                state, budget[p.seat], max_per_day, addressed_by=addressed_by
+                state, budget[p.seat], max_per_day, addressed_by=addressed_by, rate_nudge=rate_nudge
             ),
             required_keys=["action"],
             seat=p.seat,

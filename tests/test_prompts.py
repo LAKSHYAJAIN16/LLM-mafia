@@ -13,6 +13,19 @@ def test_system_prompt_warns_against_third_person_self_reference_and_repetition(
     assert "Never repeat something you've already said" in text
 
 
+def test_discussion_poll_prompt_includes_rate_nudge_when_given():
+    players = [Player(seat="Player1", model_key="m", role=Role.VILLAGER)]
+    state = GameState(players=players)
+
+    quiet_text = prompts.build_day_discussion_poll_prompt(state, 3, 4, rate_nudge="quiet")
+    talkative_text = prompts.build_day_discussion_poll_prompt(state, 3, 4, rate_nudge="talkative")
+    plain_text = prompts.build_day_discussion_poll_prompt(state, 3, 4)
+
+    assert "make yourself heard" in quiet_text
+    assert "let them have their turn" in talkative_text
+    assert "make yourself heard" not in plain_text and "let them have their turn" not in plain_text
+
+
 def test_mafia_system_prompt_only_lists_alive_teammates_as_surviving():
     players = [
         Player(seat="Player1", model_key="m", role=Role.MAFIA),

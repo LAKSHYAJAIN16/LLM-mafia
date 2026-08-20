@@ -101,7 +101,11 @@ def build_day_discussion_open_prompt(state: GameState) -> str:
 
 
 def build_day_discussion_poll_prompt(
-    state: GameState, remaining_budget: int, max_per_day: int, addressed_by: tuple[str, str] | None = None
+    state: GameState,
+    remaining_budget: int,
+    max_per_day: int,
+    addressed_by: tuple[str, str] | None = None,
+    rate_nudge: str | None = None,
 ) -> str:
     nudge = ""
     if addressed_by:
@@ -109,6 +113,16 @@ def build_day_discussion_poll_prompt(
         nudge = (
             f"\n{from_seat} just addressed you directly: \"{quote}\" -- this is your moment to "
             "respond. You don't have to, but ignoring a direct question repeatedly looks evasive.\n"
+        )
+    if rate_nudge == "quiet":
+        nudge += (
+            "\nYou've been quieter than the rest of the table so far today -- remember to make "
+            "yourself heard so you're actually part of the conversation, not just watching it.\n"
+        )
+    elif rate_nudge == "talkative":
+        nudge += (
+            "\nYou've been talking more than the rest of the table so far today -- pay attention "
+            "to how much you've said compared to others and let them have their turn too.\n"
         )
     return (
         f"{state.public_transcript_text()}\n\n"
