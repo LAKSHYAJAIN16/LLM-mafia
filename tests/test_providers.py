@@ -13,15 +13,25 @@ REPLACEMENT_CHAR = chr(0xFFFD)
 
 
 class _FakeResponse:
-    """Minimal stand-in for requests.Response: only .status_code and .content
-    are touched by our provider code (never .text/.json(), which is the point --
+    """Minimal stand-in for requests.Response: .status_code and .content are what
+    our provider code reads for the actual response (never .text/.json() there --
     those go through requests' own encoding guess, which is what corrupted
-    multi-byte characters like em dashes into U+FFFD in production).
+    multi-byte characters like em dashes into U+FFFD in production). .text and
+    .raise_for_status() exist only to support the retry-classification path,
+    which does legitimately need to inspect status/body before a decode happens.
     """
 
     def __init__(self, status_code: int, content: bytes):
         self.status_code = status_code
         self.content = content
+
+    @property
+    def text(self) -> str:
+        return self.content.decode("utf-8", errors="replace")
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code} error", response=self)
 
 
 def test_complete_decodes_utf8_body_correctly(monkeypatch):
@@ -68,3 +78,56 @@ def test_complete_flags_a_completely_empty_message_as_an_error(monkeypatch):
 
     assert resp.error == "empty_completion"
     assert resp.text == ""
+
+
+def test_complete_retries_past_an_openrouter_provider_routing_hiccup(monkeypatch):
+    # Observed in production: OpenRouter occasionally routes a request to an
+    # upstream that can't actually serve it -- HTTP 400 "does not support endpoint:
+    # completions" -- then succeeds seconds later once routed elsewhere. That's a
+    # routing hiccup, not a bad request, so it should get retried rather than
+    # surfaced as an immediate failure.
+    calls = []
+
+    def fake_post(url, headers=None, json=None, timeout=None):  # noqa: A002 - matches requests.post's real signature
+        calls.append(1)
+        if len(calls) == 1:
+            body = (
+                b'{"error": {"message": '
+                b'"model: some/model does not support endpoint: completions", "code": 400}}'
+            )
+            return _FakeResponse(400, body)
+        import json as json_module  # local import: the `json` param above shadows the module
+
+        payload = {"choices": [{"message": {"content": "ok"}}], "usage": {}}
+        return _FakeResponse(200, json_module.dumps(payload).encode("utf-8"))
+
+    monkeypatch.setattr(requests, "post", fake_post)
+    import time as time_module
+
+    monkeypatch.setattr(time_module, "sleep", lambda *_: None)
+
+    provider = OpenAICompatProvider("some-model", "fake-key", "https://openrouter.ai/api/v1")
+    resp = provider.complete("system", "user")
+
+    assert len(calls) == 2  # retried once past the routing hiccup, then succeeded
+    assert resp.error is None
+    assert resp.text == "ok"
+
+
+def test_complete_does_not_retry_a_routing_hiccup_message_off_openrouter(monkeypatch):
+    # The same 400 message from a non-OpenRouter endpoint is just a real client
+    # error, not OpenRouter's provider-routing quirk -- don't paper over it.
+    calls = []
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        calls.append(1)
+        body = b'{"error": {"message": "does not support endpoint: completions", "code": 400}}'
+        return _FakeResponse(400, body)
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    provider = OpenAICompatProvider("some-model", "fake-key", "https://example.com/v1")
+    resp = provider.complete("system", "user")
+
+    assert len(calls) == 1  # no retry -- this isn't OpenRouter
+    assert resp.error is not None and resp.error.startswith("http_400")

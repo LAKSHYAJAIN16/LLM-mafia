@@ -52,7 +52,16 @@ class OpenAICompatProvider(ChatProvider):
             resp = requests.post(
                 f"{self.base_url}/chat/completions", headers=headers, json=body, timeout=timeout
             )
-            if resp.status_code in RETRYABLE_STATUS:
+            # OpenRouter routes one logical model across several upstream providers, and
+            # occasionally selects one that can't actually serve this request shape --
+            # observed in production as HTTP 400 "model: X does not support endpoint:
+            # completions" from a model that works fine seconds later on retry, once
+            # OpenRouter picks a different upstream. That's a routing hiccup, not a bad
+            # request, so it gets the same backoff-and-retry treatment as a 5xx.
+            openrouter_routing_hiccup = (
+                self.is_openrouter and resp.status_code == 400 and "does not support endpoint" in resp.text
+            )
+            if resp.status_code in RETRYABLE_STATUS or openrouter_routing_hiccup:
                 resp.raise_for_status()
             return resp
 
