@@ -24,6 +24,12 @@ class ModelSpec:
     vendor: str = "unknown"  # company behind the model, e.g. "anthropic", "meta" -- used to
     # keep any two models from the same company out of the same game (see tournament.py)
     open_source: bool = False
+    # Static fallback pricing (USD per 1M tokens), used only when the provider doesn't
+    # report an exact live cost itself (OpenRouter does, via usage.cost -- see
+    # OpenAICompatProvider). Optional; cost tracking just reports 0 for a model
+    # without live cost reporting and no price configured here.
+    price_per_1m_input: float | None = None
+    price_per_1m_output: float | None = None
 
     @property
     def has_api_key(self) -> bool:

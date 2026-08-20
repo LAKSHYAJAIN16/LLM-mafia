@@ -17,19 +17,25 @@ leaderboard to see which model is actually best at deception and deduction.
   fill every seat.
 - Every turn is a single stateless completion call: the model gets the public
   transcript (and mafia-only chat, if it's mafia) plus its private notes, and
-  must respond with a strict JSON object (a private `thought` plus whatever
-  public field the phase needs: `message`, `vote`, `target`, `save`, or
-  `investigate`). Malformed output is retried, then falls back to a random
-  legal action -- also tracked as a `format_failures` stat per model.
+  must respond with a strict JSON object -- a private `thought` (real, unrestricted
+  reasoning that no other player ever sees) plus whatever public field the
+  phase needs: `messages` (1-3 short chat-style messages), `vote`, `target`,
+  `save`, or `investigate`. Malformed output is retried, then falls back to a
+  random legal action -- also tracked as a `format_failures` stat per model.
 - Night phase: mafia privately discuss and pick a kill target by majority
   vote among themselves; doctor picks someone to protect; detective learns
-  one player's team. Day phase: public discussion round(s), then a vote,
-  then a lynch.
-- Results are logged per-game (`results/games/*.json` full transcripts,
-  `results/summary.jsonl` compact rows) and aggregated into a leaderboard
-  with win rate (overall / as mafia / as town), a team-based Elo rating,
-  how often a model got caught while lying (mafia) or blamed while innocent
-  (town), and format-failure rate.
+  one player's *exact role* (not just team). Day phase: public discussion
+  round(s), then a vote to eliminate one player. Every death is announced to
+  the models simply as "died" -- no "lynched"/"killed" jargon anywhere a
+  model can see it.
+- Results are logged per-game (`results/games/*.json` full transcripts --
+  including every private `thought` and, if a summarizer is configured, each
+  day's digest -- plus `results/games/*.html`, a self-contained replay viewer,
+  and `results/summary.jsonl` compact rows) and aggregated into a leaderboard
+  with win rate (overall / as mafia / as town), a team-based Elo rating, how
+  often a model got caught while lying (mafia) or blamed while innocent
+  (town), format-failure rate, and $ cost (exact, via OpenRouter's live
+  `usage.cost` where available).
 
 ## Setup
 
@@ -52,18 +58,36 @@ python -m mafia_sim.cli run --games 50 --players 8
 
 # print the leaderboard from whatever's in results/ so far
 python -m mafia_sim.cli leaderboard
+
+# (re)generate the HTML replay viewer for a past game, or list game ids
+python -m mafia_sim.cli view --list
+python -m mafia_sim.cli view --game game_0000_20260101T000000Z
 ```
+
+`run` streams the game live to the console turn-by-turn by default (pass
+`--quiet` to suppress this for big tournaments). Every finished game also
+gets a self-contained `results/games/<id>.html` replay viewer -- shows the
+full transcript with each player's private `thought` interleaved in true
+chronological order, a spoiler-gated cast/role reveal, and step-through/play
+controls to watch it unfold turn by turn; open it directly in a browser.
 
 Cost note: each game makes many real API calls (one per player per
 discussion round, plus votes and night actions). Start with a small
 `--games`/`--players` count to gauge cost before running a large tournament.
-A few things in `config/game_rules.yaml` are already tuned to bound spend:
-`max_tokens: 350` (JSON replies don't need more), `max_days: 12` (caps the
-worst case), and `transcript_full_detail_days: 3` -- older day-by-day
-discussion text is dropped from the prompt (deaths/lynches and votes stay
-for the whole game since they're short and strategically important), so
-prompt size doesn't grow quadratically over a long game. The prompts also
-instruct models to keep replies to 1-2 sentences.
+Live cost is tracked per model and printed after every game (and totaled at
+the end of a run) whenever the provider reports it -- OpenRouter does, via
+`usage.cost`; the `leaderboard` command also breaks down total/avg/per-win
+cost per model. A few things in `config/game_rules.yaml` are already tuned to
+bound spend: `max_days: 12` (caps the worst case) and
+`transcript_full_detail_days: 3` -- older day-by-day discussion text is
+dropped from the prompt (deaths and votes stay for the whole game since
+they're short and strategically important), so prompt size doesn't grow
+quadratically over a long game. Optionally set `summarizer_model` to a
+roster key to compress each day into one sentence instead of dropping it
+outright once it ages out of that window (costs one small extra call/day).
+`max_tokens: 500` gives room for a real private `thought` -- the model's
+actual private reasoning space, unrestricted, and never shown to other
+players.
 
 ## Editing the roster
 

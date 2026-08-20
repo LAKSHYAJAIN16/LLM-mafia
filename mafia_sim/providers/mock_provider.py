@@ -30,17 +30,20 @@ class MockProvider(ChatProvider):
         if match:
             names = [n.strip() for n in match.group(1).split(",") if n.strip()]
 
+        pool = [
+            "I'm not sure who to trust yet.",
+            "Something feels off about the last vote.",
+            "Let's hear more before deciding.",
+            "I don't have a strong read yet.",
+        ]
         payload: dict = {"thought": "random baseline move"}
-        payload["message"] = random.choice(
-            [
-                "I'm not sure who to trust yet.",
-                "Something feels off about the last vote.",
-                "Let's hear more before deciding.",
-            ]
-        )
+        payload["messages"] = random.sample(pool, k=random.randint(1, 2))
+        payload["message"] = payload["messages"][0]  # legacy single-message fallback path
         combined = system_prompt + user_prompt
         for key in _ACTION_KEYS:
             if f'"{key}"' in combined and names:
                 payload[key] = random.choice(names)
+        if '"summary"' in combined:
+            payload["summary"] = "Mock digest: no strong consensus emerged."
 
         return ProviderResponse(text=json.dumps(payload))

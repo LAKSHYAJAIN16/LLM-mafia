@@ -13,10 +13,11 @@ class ModelStats:
     wins_as_mafia: int = 0
     games_as_town: int = 0
     wins_as_town: int = 0
-    lynched_while_mafia: int = 0  # town correctly caught them
-    lynched_while_town: int = 0  # town mistakenly killed one of their own
+    voted_out_while_mafia: int = 0  # town correctly caught them
+    voted_out_while_town: int = 0  # town mistakenly voted out one of their own
     survival_day_fraction_sum: float = 0.0  # sum of (days survived / total game days)
     format_failures: int = 0
+    total_cost_usd: float = 0.0
     elo: float = 1500.0
 
     @property
@@ -37,13 +38,21 @@ class ModelStats:
 
     @property
     def detection_rate_against(self) -> float:
-        """How often this model got lynched while playing mafia (higher = easier to catch)."""
-        return self.lynched_while_mafia / self.games_as_mafia if self.games_as_mafia else 0.0
+        """How often this model got voted out while playing mafia (higher = easier to catch)."""
+        return self.voted_out_while_mafia / self.games_as_mafia if self.games_as_mafia else 0.0
 
     @property
     def friendly_fire_rate(self) -> float:
-        """How often this model got wrongly lynched while playing town."""
-        return self.lynched_while_town / self.games_as_town if self.games_as_town else 0.0
+        """How often this model got wrongly voted out while playing town."""
+        return self.voted_out_while_town / self.games_as_town if self.games_as_town else 0.0
+
+    @property
+    def avg_cost_per_game(self) -> float:
+        return self.total_cost_usd / self.games if self.games else 0.0
+
+    @property
+    def cost_per_win(self) -> float | None:
+        return self.total_cost_usd / self.wins if self.wins else None
 
 
 ELO_K = 24.0
@@ -83,18 +92,21 @@ def compute_leaderboard(summary_path: str) -> dict[str, ModelStats]:
                     if winner == "mafia":
                         s.wins_as_mafia += 1
                         s.wins += 1
-                    if p["death_cause"] == "lynched":
-                        s.lynched_while_mafia += 1
+                    if p["death_cause"] == "voted_out":
+                        s.voted_out_while_mafia += 1
                 else:
                     s.games_as_town += 1
                     if winner == "town":
                         s.wins_as_town += 1
                         s.wins += 1
-                    if p["death_cause"] == "lynched":
-                        s.lynched_while_town += 1
+                    if p["death_cause"] == "voted_out":
+                        s.voted_out_while_town += 1
 
             for key, count in game.get("format_failures", {}).items():
                 get(key).format_failures += count
+
+            for key, amount in game.get("cost_usd", {}).items():
+                get(key).total_cost_usd += amount
 
             if winner in ("mafia", "town"):
                 mafia_players = [p for p in players if p["team"] == "mafia"]
@@ -122,14 +134,18 @@ def render_markdown_table(stats: dict[str, ModelStats]) -> str:
     rows = sorted(stats.values(), key=lambda s: s.elo, reverse=True)
     header = (
         "| Rank | Model | Elo | Games | Win Rate | Mafia WR | Town WR | "
-        "Caught as Mafia | Friendly-Fired | Format Fails |\n"
-        "|---|---|---|---|---|---|---|---|---|---|\n"
+        "Caught as Mafia | Friendly-Fired | Format Fails | Total Cost | $/Game | $/Win |\n"
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|\n"
     )
     lines = [header]
     for i, s in enumerate(rows, start=1):
+        cost_per_win = f"${s.cost_per_win:.4f}" if s.cost_per_win is not None else "-"
         lines.append(
             f"| {i} | {s.model_key} | {s.elo:.0f} | {s.games} | {s.win_rate:.0%} | "
             f"{s.mafia_win_rate:.0%} | {s.town_win_rate:.0%} | {s.detection_rate_against:.0%} | "
-            f"{s.friendly_fire_rate:.0%} | {s.format_failures} |\n"
+            f"{s.friendly_fire_rate:.0%} | {s.format_failures} | ${s.total_cost_usd:.4f} | "
+            f"${s.avg_cost_per_game:.4f} | {cost_per_win} |\n"
         )
+    total_cost = sum(s.total_cost_usd for s in rows)
+    lines.append(f"\nTotal spend across all games: ${total_cost:.4f}\n")
     return "".join(lines)

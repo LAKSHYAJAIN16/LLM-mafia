@@ -9,6 +9,7 @@ class ProviderResponse:
     text: str
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cost_usd: float = 0.0  # exact cost if the provider reports one (e.g. OpenRouter), else 0.0
     error: str | None = None
 
 

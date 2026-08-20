@@ -35,6 +35,8 @@ def _print_event(entry) -> None:
         print(f"[Day {entry.day}]   -> {entry.text}")
     elif entry.kind == "mafia_chat":
         print(f"[Night {entry.day}] (mafia) {entry.speaker}: {entry.text}")
+    elif entry.kind == "thought":
+        print(f"[Day {entry.day}]     ({entry.speaker} thinking) {entry.text}")
     else:
         print(f"[Day {entry.day}] {entry.text}")
 
@@ -55,9 +57,15 @@ def cmd_run(args: argparse.Namespace) -> None:
     print(f"[run] roster: {', '.join(roster.keys())}")
 
     logger = ResultsLogger(args.out)
+    running_total = {"cost": 0.0}
 
     def on_done(i: int, total: int, game_id: str, result) -> None:
-        print(f"[run] game {i + 1}/{total} ({game_id}): winner={result.winner} days={result.days}")
+        game_cost = sum(result.state.cost_usd.values())
+        running_total["cost"] += game_cost
+        print(
+            f"[run] game {i + 1}/{total} ({game_id}): winner={result.winner} days={result.days} "
+            f"cost=${game_cost:.4f} (running total ${running_total['cost']:.4f})"
+        )
         html_path = logger.html_path(game_id)
         if html_path:
             print(f"[run] replay viewer: {html_path}")
@@ -72,7 +80,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         on_game_done=on_done,
         on_event=None if args.quiet else _print_event,
     )
-    print(f"[run] done. Results in {args.out}/")
+    print(f"[run] done. Results in {args.out}/. Total spend: ${running_total['cost']:.4f}")
 
 
 def cmd_view(args: argparse.Namespace) -> None:

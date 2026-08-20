@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import requests
 
 from .base import ChatProvider, ProviderResponse
@@ -14,6 +16,7 @@ class OpenAICompatProvider(ChatProvider):
     def __init__(self, model_id: str, api_key: str | None, base_url: str):
         super().__init__(model_id, api_key)
         self.base_url = base_url.rstrip("/")
+        self.is_openrouter = "openrouter.ai" in self.base_url
 
     def complete(
         self,
@@ -39,6 +42,11 @@ class OpenAICompatProvider(ChatProvider):
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if self.is_openrouter:
+            # Asks OpenRouter to report the exact USD cost of this generation in
+            # usage.cost, so spend can be tracked precisely instead of estimated
+            # from a hand-maintained price table.
+            body["usage"] = {"include": True}
 
         def call() -> requests.Response:
             resp = requests.post(
@@ -53,10 +61,19 @@ class OpenAICompatProvider(ChatProvider):
         except Exception as exc:  # noqa: BLE001
             return ProviderResponse(text="", error=f"request_failed: {exc}")
 
-        if resp.status_code != 200:
-            return ProviderResponse(text="", error=f"http_{resp.status_code}: {resp.text[:300]}")
+        # Decode raw bytes as UTF-8 explicitly rather than relying on requests'
+        # encoding auto-detection, which has been observed to mis-guess the
+        # encoding for some responses and silently corrupt multi-byte characters
+        # (e.g. em dashes) into U+FFFD replacement characters.
+        body_text = resp.content.decode("utf-8", errors="replace")
 
-        data = resp.json()
+        if resp.status_code != 200:
+            return ProviderResponse(text="", error=f"http_{resp.status_code}: {body_text[:300]}")
+
+        try:
+            data = json.loads(body_text)
+        except json.JSONDecodeError as exc:
+            return ProviderResponse(text="", error=f"invalid_json_response: {exc}")
         try:
             text = data["choices"][0]["message"]["content"] or ""
         except (KeyError, IndexError, TypeError):
@@ -67,4 +84,5 @@ class OpenAICompatProvider(ChatProvider):
             text=text,
             prompt_tokens=usage.get("prompt_tokens", 0),
             completion_tokens=usage.get("completion_tokens", 0),
+            cost_usd=float(usage.get("cost") or 0.0),
         )

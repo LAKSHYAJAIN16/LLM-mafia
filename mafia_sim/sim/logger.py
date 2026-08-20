@@ -32,8 +32,12 @@ class ResultsLogger:
             "players": [dataclasses.asdict(p) for p in state.players],
             "public_log": [dataclasses.asdict(e) for e in state.public_log],
             "mafia_log": [dataclasses.asdict(e) for e in state.mafia_log],
+            "thought_log": [dataclasses.asdict(e) for e in state.thought_log],
             "day_votes": state.day_votes,
+            "day_summaries": state.day_summaries,
             "format_failures": state.format_failures,
+            "cost_usd": state.cost_usd,
+            "total_cost_usd": round(sum(state.cost_usd.values()), 6),
         }
         with open(os.path.join(self.games_dir, f"{game_id}.json"), "w", encoding="utf-8") as f:
             json.dump(full_record, f, indent=2, default=str)
@@ -59,6 +63,8 @@ class ResultsLogger:
                 for p in state.players
             ],
             "format_failures": state.format_failures,
+            "cost_usd": state.cost_usd,
+            "total_cost_usd": round(sum(state.cost_usd.values()), 6),
         }
         with open(self.summary_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(summary_record, default=str) + "\n")

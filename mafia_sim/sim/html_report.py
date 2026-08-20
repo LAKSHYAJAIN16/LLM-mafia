@@ -40,6 +40,9 @@ button:hover { background: #343948; }
 .entry-speech { background: #1c1f28; }
 .entry-vote { background: #1c1f28; border-left: 3px solid #6b8fd9; font-size: 0.85rem; color: #b8bacb; }
 .entry-mafia_chat { background: #241a1a; border-left: 3px solid #ff6b6b; }
+.entry-thought { background: transparent; border-left: 3px solid #4a4e5c; color: #9a9caa;
+  font-style: italic; padding-top: 0.35rem; padding-bottom: 0.35rem; }
+.entry-summary { background: #1a2024; border-left: 3px solid #6b8fd9; color: #b8bacb; font-size: 0.85rem; }
 .speaker { font-weight: 600; margin-right: 0.4rem; }
 .tag { font-size: 0.7rem; color: #b8bacb; margin-left: 0.4rem; }
 """
@@ -53,8 +56,15 @@ def _role_class(team: str) -> str:
     return "role-mafia" if team == "mafia" else "role-town"
 
 
+_CAUSE_LABELS = {"voted_out": "voted out", "killed": "killed at night"}
+
+
 def _player_row(p: dict) -> str:
-    outcome = "alive at end" if p["alive"] else f"died day {p['death_day']} ({p['death_cause']})"
+    if p["alive"]:
+        outcome = "alive at end"
+    else:
+        cause = _CAUSE_LABELS.get(p["death_cause"], p["death_cause"])
+        outcome = f"died day {p['death_day']} ({cause})"
     team = "mafia" if p["role"] == "mafia" else "town"
     return (
         f"<tr><td>{escape(p['seat'])}</td><td>{escape(p['model_key'])}</td>"
@@ -62,9 +72,18 @@ def _player_row(p: dict) -> str:
     )
 
 
-def _entry_div(day: int, label: str, kind: str, speaker: str | None, text: str) -> str:
+_KIND_LABELS = {
+    "mafia_chat": "mafia-only",
+    "thought": "private thought",
+    "speech": "speech",
+    "vote": "vote",
+    "system": "system",
+}
+
+
+def _entry_div(kind: str, speaker: str | None, text: str) -> str:
     speaker_html = f"<span class='speaker'>{escape(speaker)}</span>" if speaker else ""
-    tag = f"<span class='tag'>{escape(label)}</span>"
+    tag = f"<span class='tag'>{escape(_KIND_LABELS.get(kind, kind))}</span>"
     return f"<div class='entry entry-{escape(kind)}'>{speaker_html}{escape(text)}{tag}</div>"
 
 
@@ -74,30 +93,53 @@ def render_game_html(record: dict) -> str:
     winner_label = {"mafia": "MAFIA", "town": "TOWN"}.get(winner or "", "DRAW / timeout")
     days = record.get("days", 0)
     players = record.get("players", [])
+    day_summaries = record.get("day_summaries", {})
 
     rows = "\n".join(_player_row(p) for p in players)
 
-    by_day: dict[int, dict[str, list]] = {}
-    for e in record.get("mafia_log", []):
-        by_day.setdefault(e["day"], {"night": [], "day": []})["night"].append(e)
-    for e in record.get("public_log", []):
-        by_day.setdefault(e["day"], {"night": [], "day": []})["day"].append(e)
+    # All three logs (public speech/votes/system, mafia-only chat, and private
+    # thoughts) share one global "seq" counter, so merging and sorting by it
+    # reproduces the true turn-by-turn order the game actually happened in --
+    # e.g. a player's private "thought" appears right before the public
+    # message it led to, not lumped separately.
+    all_entries = [
+        *record.get("public_log", []),
+        *record.get("mafia_log", []),
+        *record.get("thought_log", []),
+    ]
+    all_entries.sort(key=lambda e: e.get("seq", 0))
 
     entries_html: list[str] = []
-    for day in sorted(by_day.keys()):
-        bucket = by_day[day]
-        if bucket["night"]:
-            entries_html.append(f"<div class='heading'>Night {day}</div>")
-            for e in bucket["night"]:
-                entries_html.append(_entry_div(day, "mafia-only", "mafia_chat", e["speaker"], e["text"]))
-        if bucket["day"]:
-            entries_html.append(f"<div class='heading'>Day {day}</div>")
-            for e in bucket["day"]:
-                entries_html.append(_entry_div(day, e["kind"], e["kind"], e["speaker"], e["text"]))
+    last_section: tuple[int, str] | None = None
+    summarized_days: set[int] = set()
+    for e in all_entries:
+        section = (e["day"], e["phase"])
+        if section != last_section:
+            if last_section is not None and last_section[0] not in summarized_days:
+                summary = day_summaries.get(last_section[0]) or day_summaries.get(str(last_section[0]))
+                if summary:
+                    entries_html.append(
+                        f"<div class='entry entry-summary'>Day {last_section[0]} digest (used to compress "
+                        f"this day once it aged out of the model's prompt): {escape(summary)}</div>"
+                    )
+                summarized_days.add(last_section[0])
+            label = "Night" if e["phase"] == "night" else "Day"
+            entries_html.append(f"<div class='heading'>{label} {e['day']}</div>")
+            last_section = section
+        entries_html.append(_entry_div(e["kind"], e.get("speaker"), e["text"]))
+
+    if last_section is not None and last_section[0] not in summarized_days:
+        summary = day_summaries.get(last_section[0]) or day_summaries.get(str(last_section[0]))
+        if summary:
+            entries_html.append(
+                f"<div class='entry entry-summary'>Day {last_section[0]} digest (used to compress this "
+                f"day once it aged out of the model's prompt): {escape(summary)}</div>"
+            )
 
     transcript = "\n".join(entries_html)
 
-    return f"""<title>Mafia replay -- {escape(game_id)}</title>
+    return f"""<meta charset="utf-8">
+<title>Mafia replay -- {escape(game_id)}</title>
 <style>{_CSS}</style>
 <div class="wrap">
   <h1>Mafia replay: {escape(game_id)}</h1>

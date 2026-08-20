@@ -8,6 +8,12 @@ from ..providers.base import ChatProvider
 from ..providers.factory import ModelSpec
 
 
+def _has_value(v) -> bool:
+    if isinstance(v, list):
+        return any(str(x).strip() for x in v)
+    return bool(str(v or "").strip())
+
+
 class PlayerAgent:
     """Wraps one roster model as a game participant: issues a prompt, parses the
     required JSON fields back out, resolves any player-name fields to exact seats,
@@ -18,6 +24,14 @@ class PlayerAgent:
         self.spec = spec
         self.provider = provider
         self.rules = rules
+
+    def _track_cost(self, state: GameState, resp) -> None:
+        cost = resp.cost_usd
+        if not cost and (self.spec.price_per_1m_input or self.spec.price_per_1m_output):
+            cost = (resp.prompt_tokens / 1_000_000) * (self.spec.price_per_1m_input or 0.0) + (
+                resp.completion_tokens / 1_000_000
+            ) * (self.spec.price_per_1m_output or 0.0)
+        state.add_cost(self.spec.key, cost)
 
     def ask(
         self,
@@ -39,12 +53,13 @@ class PlayerAgent:
             )
             if resp.error:
                 continue
+            self._track_cost(state, resp)
 
             obj = parse_json_object(resp.text)
             if obj is None:
                 continue
 
-            missing = [k for k in required_keys if not str(obj.get(k, "")).strip()]
+            missing = [k for k in required_keys if not _has_value(obj.get(k))]
             if missing:
                 continue
 
@@ -64,7 +79,7 @@ class PlayerAgent:
             return resolved
 
         state.note_format_failure(self.spec.key)
-        fallback: dict = {"thought": "", "message": "(no response)"}
+        fallback: dict = {"thought": "", "message": "(no response)", "messages": ["(no response)"]}
         if target_keys:
             for key, candidates in target_keys.items():
                 if candidates:

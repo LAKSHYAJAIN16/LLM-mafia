@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import requests
 
 from .base import ChatProvider, ProviderResponse
@@ -45,10 +47,19 @@ class AnthropicProvider(ChatProvider):
         except Exception as exc:  # noqa: BLE001
             return ProviderResponse(text="", error=f"request_failed: {exc}")
 
-        if resp.status_code != 200:
-            return ProviderResponse(text="", error=f"http_{resp.status_code}: {resp.text[:300]}")
+        # Decode raw bytes as UTF-8 explicitly rather than relying on requests'
+        # encoding auto-detection, which has been observed to mis-guess the
+        # encoding for some responses and silently corrupt multi-byte characters
+        # (e.g. em dashes) into U+FFFD replacement characters.
+        body_text = resp.content.decode("utf-8", errors="replace")
 
-        data = resp.json()
+        if resp.status_code != 200:
+            return ProviderResponse(text="", error=f"http_{resp.status_code}: {body_text[:300]}")
+
+        try:
+            data = json.loads(body_text)
+        except json.JSONDecodeError as exc:
+            return ProviderResponse(text="", error=f"invalid_json_response: {exc}")
         text = "".join(
             block.get("text", "") for block in data.get("content", []) if block.get("type") == "text"
         )

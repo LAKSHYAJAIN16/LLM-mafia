@@ -78,6 +78,11 @@ def run_tournament(
     on_game_done=None,
     on_event=None,
 ) -> list[GameResult]:
+    summarizer_key = rules.get("summarizer_model")
+    summarizer = roster[summarizer_key][1] if summarizer_key and summarizer_key in roster else None
+    if summarizer_key and summarizer is None:
+        print(f"[run] summarizer_model '{summarizer_key}' not in roster -- day summarization disabled")
+
     results: list[GameResult] = []
     for i in range(num_games):
         state, agents = setup_game(roster, player_count, role_setups, rules, on_event=on_event)
@@ -89,7 +94,7 @@ def run_tournament(
             cast = ", ".join(f"{p.seat}={roster[p.model_key][0].display_name}" for p in state.players)
             on_event(LogEntry(0, "day", "cast", None, f"Cast: {cast}"))
 
-        engine = GameEngine(state, agents, rules)
+        engine = GameEngine(state, agents, rules, summarizer=summarizer, summarizer_key=summarizer_key)
         result = engine.run()
         game_id = logger.save_game(i, result)
         results.append(result)
