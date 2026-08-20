@@ -59,20 +59,20 @@ models:
     open_source: false
     enabled: true
 
-  - key: gemini-2.5-pro
-    display_name: "Gemini 2.5 Pro"
+  - key: gemini-pro-latest
+    display_name: "Gemini Pro"
     provider: google
     vendor: google
-    model_id: gemini-2.5-pro
+    model_id: gemini-pro-latest
     api_key_env: GEMINI_API_KEY
     open_source: false
     enabled: true
 
-  - key: gemini-2.5-flash
-    display_name: "Gemini 2.5 Flash"
+  - key: gemini-3.6-flash
+    display_name: "Gemini 3.6 Flash"
     provider: google
     vendor: google
-    model_id: gemini-2.5-flash
+    model_id: gemini-3.6-flash
     api_key_env: GEMINI_API_KEY
     open_source: false
     enabled: true
@@ -107,11 +107,11 @@ models:
     open_source: true
     enabled: true
 
-  - key: llama-3.3-70b
-    display_name: "Llama 3.3 70B (Groq)"
+  - key: gpt-oss-120b
+    display_name: "GPT-OSS 120B (Groq)"
     provider: openai_compat
-    vendor: meta
-    model_id: llama-3.3-70b-versatile
+    vendor: openai
+    model_id: openai/gpt-oss-120b
     base_url: https://api.groq.com/openai/v1
     api_key_env: GROQ_API_KEY
     open_source: true
