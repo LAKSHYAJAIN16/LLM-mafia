@@ -1,17 +1,41 @@
 from __future__ import annotations
 
 import random
+import re
 
 from ..game.parsing import parse_json_object, resolve_seat
 from ..game.state import GameState
 from ..providers.base import ChatProvider
 from ..providers.factory import ModelSpec
 
+_FREE_TEXT_KEYS = ("message", "speech")
+
 
 def _has_value(v) -> bool:
     if isinstance(v, list):
         return any(str(x).strip() for x in v)
     return bool(str(v or "").strip())
+
+
+def _self_reference_violation(resolved: dict, seat: str | None) -> str | None:
+    """Returns the offending line if any public-facing free-text field refers to the
+    speaker's own seat name in the third person (e.g. "Player3 thinks..." written by
+    Player3 itself) -- a real, structural check rather than hoping the system prompt's
+    warning alone sticks, since that alone wasn't reliably preventing it.
+    """
+    if not seat:
+        return None
+    pattern = re.compile(rf"\b{re.escape(seat)}\b")
+    for key in _FREE_TEXT_KEYS:
+        val = resolved.get(key)
+        if isinstance(val, str) and pattern.search(val):
+            return val
+    messages = resolved.get("messages")
+    if isinstance(messages, list):
+        for m in messages:
+            if isinstance(m, str) and pattern.search(m):
+                return m
+    return None
 
 
 class PlayerAgent:
@@ -45,11 +69,12 @@ class PlayerAgent:
         max_tokens: int | None = None,
     ) -> dict:
         attempts = self.rules.get("max_format_retries", 2) + 1
+        effective_user_prompt = user_prompt
 
         for attempt in range(1, attempts + 1):
             resp = self.provider.complete(
                 system_prompt,
-                user_prompt,
+                effective_user_prompt,
                 temperature=self.rules.get("temperature", 0.9),
                 max_tokens=max_tokens if max_tokens is not None else self.rules.get("max_tokens", 500),
                 timeout=self.rules.get("request_timeout_seconds", 60),
@@ -60,7 +85,7 @@ class PlayerAgent:
                 purpose=purpose,
                 attempt=attempt,
                 system_prompt=system_prompt,
-                user_prompt=user_prompt,
+                user_prompt=effective_user_prompt,
                 response_text=resp.text,
                 error=resp.error,
                 cost_usd=resp.cost_usd,
@@ -92,6 +117,19 @@ class PlayerAgent:
                             break
                         resolved[key] = seat_val
             if not valid:
+                continue
+
+            violation = _self_reference_violation(resolved, seat)
+            if violation and attempt < attempts:
+                # A real regenerate, not just another blind retry: the model gets told
+                # exactly what it did wrong so the next attempt has a real chance of
+                # fixing it, instead of hoping temperature alone shakes it loose.
+                effective_user_prompt = (
+                    f"{user_prompt}\n\nSYSTEM NOTE: your previous response referred to "
+                    f"yourself as \"{seat}\" in the third person (\"{violation}\"). You "
+                    f"are {seat} -- rewrite using \"I\"/\"me\" instead of your own seat "
+                    "name. Try again."
+                )
                 continue
 
             return resolved
