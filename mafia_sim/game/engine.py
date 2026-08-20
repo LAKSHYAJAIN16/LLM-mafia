@@ -166,7 +166,7 @@ class GameEngine:
         kill_target = _majority_choice(proposals)
 
         doctor_save: str | None = None
-        doctor_player = None
+        attack_blocked = False
         for p in state.alive_by_role(Role.DOCTOR):
             candidates = [s.seat for s in state.alive_players()]
             reply = self.agents[p.seat].ask(
@@ -180,7 +180,22 @@ class GameEngine:
             )
             state.log_thought("night", p.seat, str(reply.get("thought", "")))
             doctor_save = reply.get("save")
-            doctor_player = p
+
+            # Reveal (and note) the outcome right here, immediately after the doctor's
+            # own action -- not batched in afterward, so the replay/console shows each
+            # player's outcome right after that player acted, in true turn order.
+            attack_blocked = bool(kill_target and doctor_save and kill_target == doctor_save)
+            if doctor_save:
+                if attack_blocked:
+                    p.private_notes.append(
+                        f"Night {state.day}: you protected {doctor_save} -- {doctor_save} was attacked and you saved them!"
+                    )
+                    state.log_reveal("night", p.seat, f"{p.seat} protected {doctor_save} -- {doctor_save} was saved!")
+                else:
+                    p.private_notes.append(
+                        f"Night {state.day}: you protected {doctor_save}. No attack landed on them that night."
+                    )
+                    state.log_reveal("night", p.seat, f"{p.seat} protected {doctor_save}. No attack landed on them.")
 
         for p in state.alive_by_role(Role.DETECTIVE):
             candidates = [s.seat for s in state.alive_players() if s.seat != p.seat]
@@ -205,19 +220,6 @@ class GameEngine:
                 # Spectator-only reveal (console/HTML replay) -- never reaches another
                 # player's prompt, only this detective's own private_notes above do.
                 state.log_reveal("night", p.seat, f"{p.seat} investigated {target_seat} -- {target_seat} is {role}.")
-
-        attack_blocked = bool(kill_target and doctor_save and kill_target == doctor_save)
-        if doctor_player and doctor_save:
-            if attack_blocked:
-                doctor_player.private_notes.append(
-                    f"Night {state.day}: you protected {doctor_save} -- {doctor_save} was attacked and you saved them!"
-                )
-                state.log_reveal("night", doctor_player.seat, f"{doctor_player.seat} protected {doctor_save} -- {doctor_save} was saved!")
-            else:
-                doctor_player.private_notes.append(
-                    f"Night {state.day}: you protected {doctor_save}. No attack landed on them that night."
-                )
-                state.log_reveal("night", doctor_player.seat, f"{doctor_player.seat} protected {doctor_save}. No attack landed on them.")
 
         if kill_target and not attack_blocked and state.get(kill_target).alive:
             state.kill(kill_target, "killed")
