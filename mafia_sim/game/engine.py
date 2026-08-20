@@ -22,7 +22,6 @@ class GameResult:
 
 MAX_MESSAGES_PER_TURN = 3  # burst cap for night mafia chat
 DEFAULT_MAX_MESSAGES_PER_DAY = 5  # per-player daily budget for the open-floor day discussion, unless rules overrides it
-MIN_COST_FOR_SHARE_CHECK = 0.05  # don't judge cost-share until total spend is past pocket-change noise
 
 
 def _extract_messages(reply: dict) -> list[str]:
@@ -110,22 +109,6 @@ class GameEngine:
         cap = self.rules.get("max_cost_usd")
         if cap and total >= cap:
             return f"cost cap (${cap:.2f}) reached (spent ${total:.4f})"
-
-        # A single expensive model dominating spend is its own failure mode, distinct
-        # from the game as a whole running long -- observed in a real game where one
-        # model (well-formed responses, no retries, just expensive per token) alone
-        # accounted for ~30% of that game's entire budget. MIN_COST_FOR_SHARE_CHECK
-        # guards against one early call looking like "100% of total" when total is
-        # still a few cents and hasn't had a chance to even out yet.
-        share_cap = self.rules.get("max_cost_share_per_model")
-        if share_cap and total >= MIN_COST_FOR_SHARE_CHECK and self.state.cost_usd:
-            worst_model, worst_cost = max(self.state.cost_usd.items(), key=lambda kv: kv[1])
-            share = worst_cost / total
-            if share > share_cap:
-                return (
-                    f"{worst_model} alone reached {share:.0%} of total spend "
-                    f"(cap {share_cap:.0%}, ${worst_cost:.4f} of ${total:.4f})"
-                )
 
         return None
 

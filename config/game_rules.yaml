@@ -23,15 +23,6 @@ max_days: 12                  # safety cap; game is declared a draw if exceeded 
 # max_days. Set to null to disable (no cap).
 max_cost_usd: 2.00
 
-# Guards against one model quietly dominating a game's spend -- observed in a real
-# game where a single model (no errors, no retries, just expensive per token) alone
-# accounted for ~30% of that game's total cost. If any one model's cumulative cost
-# exceeds this fraction of total spend so far, the game ends early the same way
-# max_cost_usd does. Only evaluated once total spend passes pocket-change noise
-# (engine.py:MIN_COST_FOR_SHARE_CHECK), so one early call can't look like "100% of
-# total" before spend has had a chance to even out. Set to null to disable.
-max_cost_share_per_model: 0.5
-
 # Day discussion is an open floor, not a fixed speaking order: one random player
 # opens, then each turn taps one alive player with messages left to decide whether
 # to speak (exactly one message), think privately, or pass. Whoever was just

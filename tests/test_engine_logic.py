@@ -469,41 +469,6 @@ def test_budget_exceeded_is_false_when_cap_is_disabled():
     assert engine._budget_exceeded() is False
 
 
-def test_run_stops_early_when_one_model_dominates_spend():
-    roster = _mock_roster(8)
-    state, agents = setup_game(roster, player_count=8, role_setups=ROLE_SETUPS, rules=RULES)
-    # One model way out ahead of the rest -- 90% of a real total, well past the cap.
-    state.add_cost("mock-0", 0.45)
-    state.add_cost("mock-1", 0.05)
-
-    rules = {**RULES, "max_cost_usd": None, "max_cost_share_per_model": 0.5}
-    engine = GameEngine(state, agents, rules)
-
-    result = engine.run()
-
-    assert result.winner is None
-    assert result.days == 0
-    assert any("mock-0" in e.text and "%" in e.text for e in state.public_log)
-
-
-def test_cost_share_check_ignores_pocket_change_totals():
-    # A single call before spend has evened out shouldn't look like "one model
-    # took 100%" and trip the game to a halt three seconds in.
-    state = GameState(players=_villagers(1))
-    state.add_cost("mock-0", 0.001)
-    engine = GameEngine(state, {}, {"max_cost_share_per_model": 0.5})
-
-    assert engine._budget_exceeded() is False
-
-
-def test_cost_share_check_is_off_by_default_when_unset():
-    state = GameState(players=_villagers(1))
-    state.add_cost("mock-0", 1.0)
-    engine = GameEngine(state, {}, {"max_cost_share_per_model": None})
-
-    assert engine._budget_exceeded() is False
-
-
 def test_summarizer_only_fires_once_a_day_ages_out_of_the_window():
     state = GameState(players=_villagers(4), transcript_full_detail_days=2)
     rules = {"request_timeout_seconds": 30}

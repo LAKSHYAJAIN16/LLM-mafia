@@ -23,10 +23,9 @@ models:
     enabled: true
 
   # Disabled 2026-08-20: genuinely expensive per token via OpenRouter -- in one real
-  # game it alone accounted for 50.2% of that game's entire cost ($0.2958 of $0.5898),
-  # which is exactly what tripped the new max_cost_share_per_model safeguard. Not a
-  # bug like gemini-2.5-pro-or/glm-4.6-or above, just priced too high to keep in the
-  # roster for cost-sensitive runs.
+  # game it alone accounted for 50.2% of that game's entire cost ($0.2958 of $0.5898).
+  # Not a bug like gemini-2.5-pro-or/glm-4.6-or above, just priced too high to keep in
+  # the roster for cost-sensitive runs.
   - key: claude-sonnet-5-or
     display_name: "Claude Sonnet 5 (OpenRouter)"
     provider: openai_compat
