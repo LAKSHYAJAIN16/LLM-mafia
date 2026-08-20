@@ -33,13 +33,15 @@ class GameState:
     public_log: list[LogEntry] = field(default_factory=list)
     mafia_log: list[LogEntry] = field(default_factory=list)
     thought_log: list[LogEntry] = field(default_factory=list)  # spectator-only private reasoning
+    vote_log: list[LogEntry] = field(default_factory=list)  # spectator-only -- ballots are secret from players
     day: int = 0
     _seq: int = field(default=0, repr=False, compare=False)
-    day_votes: list[dict] = field(default_factory=list)  # [{day, votes: {voter: target}}]
+    day_votes: list[dict] = field(default_factory=list)  # [{day, round, votes: {voter: target}}]
     format_failures: dict[str, int] = field(default_factory=dict)  # model_key -> count
     cost_usd: dict[str, float] = field(default_factory=dict)  # model_key -> accumulated $ spend
     transcript_full_detail_days: int = 3  # older "speech" entries are dropped to bound prompt growth
     day_summaries: dict[int, str] = field(default_factory=dict)  # day -> 1-sentence summary (opt-in)
+    raw_calls: list[dict] = field(default_factory=list)  # exact (system_prompt, user_prompt) -> raw response text, every LLM call
     on_event: Callable[[LogEntry], None] | None = field(default=None, repr=False, compare=False)
 
     def get(self, seat: str) -> Player:
@@ -99,12 +101,53 @@ class GameState:
         if self.on_event:
             self.on_event(entry)
 
+    def log_vote(self, phase: str, speaker: str, text: str) -> None:
+        # Ballots are secret: this goes to vote_log (spectator-only, e.g. the HTML
+        # replay), never to public_log, so public_transcript_text() -- the only thing
+        # that feeds a player's prompt -- never reveals who voted for whom.
+        entry = LogEntry(self.day, phase, "vote", speaker, text, seq=self._next_seq())
+        self.vote_log.append(entry)
+        if self.on_event:
+            self.on_event(entry)
+
     def note_format_failure(self, model_key: str) -> None:
         self.format_failures[model_key] = self.format_failures.get(model_key, 0) + 1
 
     def add_cost(self, model_key: str, amount: float) -> None:
         if amount:
             self.cost_usd[model_key] = self.cost_usd.get(model_key, 0.0) + amount
+
+    def log_raw_call(
+        self,
+        *,
+        seat: str | None,
+        model_key: str | None,
+        purpose: str,
+        attempt: int,
+        system_prompt: str,
+        user_prompt: str,
+        response_text: str,
+        error: str | None,
+        cost_usd: float = 0.0,
+    ) -> None:
+        """Exact record of one LLM call for auditing -- verbatim input and verbatim
+        raw output text, independent of whatever the engine/replay logs render.
+        """
+        self.raw_calls.append(
+            {
+                "seq": self._next_seq(),
+                "day": self.day,
+                "seat": seat,
+                "model_key": model_key,
+                "purpose": purpose,
+                "attempt": attempt,
+                "system_prompt": system_prompt,
+                "user_prompt": user_prompt,
+                "response_text": response_text,
+                "error": error,
+                "cost_usd": cost_usd,
+            }
+        )
 
     def public_transcript_text(self) -> str:
         # System events (deaths) and votes are compact and stay in full for the

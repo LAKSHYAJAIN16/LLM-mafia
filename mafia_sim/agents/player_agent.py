@@ -40,16 +40,29 @@ class PlayerAgent:
         user_prompt: str,
         required_keys: list[str],
         target_keys: dict[str, list[str]] | None = None,
+        seat: str | None = None,
+        purpose: str = "",
     ) -> dict:
         attempts = self.rules.get("max_format_retries", 2) + 1
 
-        for _ in range(attempts):
+        for attempt in range(1, attempts + 1):
             resp = self.provider.complete(
                 system_prompt,
                 user_prompt,
                 temperature=self.rules.get("temperature", 0.9),
                 max_tokens=self.rules.get("max_tokens", 500),
                 timeout=self.rules.get("request_timeout_seconds", 60),
+            )
+            state.log_raw_call(
+                seat=seat,
+                model_key=self.spec.key,
+                purpose=purpose,
+                attempt=attempt,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                response_text=resp.text,
+                error=resp.error,
+                cost_usd=resp.cost_usd,
             )
             if resp.error:
                 continue
@@ -68,11 +81,11 @@ class PlayerAgent:
             if target_keys:
                 for key, candidates in target_keys.items():
                     if key in resolved:
-                        seat = resolve_seat(str(resolved[key]), candidates)
-                        if seat is None:
+                        seat_val = resolve_seat(str(resolved[key]), candidates)
+                        if seat_val is None:
                             valid = False
                             break
-                        resolved[key] = seat
+                        resolved[key] = seat_val
             if not valid:
                 continue
 

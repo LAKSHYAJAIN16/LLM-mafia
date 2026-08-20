@@ -97,15 +97,17 @@ def render_game_html(record: dict) -> str:
 
     rows = "\n".join(_player_row(p) for p in players)
 
-    # All three logs (public speech/votes/system, mafia-only chat, and private
-    # thoughts) share one global "seq" counter, so merging and sorting by it
-    # reproduces the true turn-by-turn order the game actually happened in --
-    # e.g. a player's private "thought" appears right before the public
-    # message it led to, not lumped separately.
+    # All logs (public speech/system, mafia-only chat, private thoughts, and secret
+    # ballots) share one global "seq" counter, so merging and sorting by it
+    # reproduces the true turn-by-turn order the game actually happened in -- e.g. a
+    # player's private "thought" appears right before the public message it led to,
+    # not lumped separately. Votes come from vote_log (spectator-only) rather than
+    # public_log, since ballots are secret from the players themselves.
     all_entries = [
         *record.get("public_log", []),
         *record.get("mafia_log", []),
         *record.get("thought_log", []),
+        *record.get("vote_log", []),
     ]
     all_entries.sort(key=lambda e: e.get("seq", 0))
 

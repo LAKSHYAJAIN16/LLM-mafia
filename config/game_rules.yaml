@@ -15,7 +15,15 @@ role_setups:
 reveal_role_on_death: false   # if true, everyone learns the role of anyone who died
 discussion_rounds_per_day: 1  # how many speaking turns each alive player gets before voting
 max_days: 12                  # safety cap; game is declared a draw if exceeded (also bounds worst-case token spend)
-tie_vote_policy: random       # 'random' or 'no_elimination' when the day vote is tied
+
+# Voting is a secret ballot -- players never learn who voted for whom, only the
+# eventual outcome (see mafia_sim/game/state.py:log_vote). A tie at the top goes to
+# a showdown: the tied players publicly make their case, then everyone revotes among
+# just the tied set, repeating until one player has sole possession of the most
+# votes. max_showdown_rounds bounds how many revotes can happen in one day; if still
+# tied after that many rounds, tie_vote_policy decides the fallback.
+max_showdown_rounds: 5
+tie_vote_policy: random       # 'random' or 'no_elimination' -- fallback once max_showdown_rounds is exhausted
 
 # Cost control: full day-by-day discussion text older than this many days is
 # dropped from the prompt (system events -- deaths -- and votes stay for the

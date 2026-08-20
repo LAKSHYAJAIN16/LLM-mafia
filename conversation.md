@@ -131,9 +131,44 @@ companies.
   **$0.2733** (GPT-5.5 alone was ~61% of that, being the priciest flagship
   model and also mafia, meaning more calls).
 
+## Second session: secret ballots, tie showdowns, lazy summarization, raw I/O log
+
+- **Secret voting**: votes used to be written straight into `public_log`, so
+  every voter after the first could literally read who everyone before them
+  had voted for in that same round -- and it stayed visible in all later
+  prompts too. Fixed by giving votes their own spectator-only `vote_log`
+  (mirrors how private `thought`s already worked), so `public_transcript_text()` --
+  the only thing that ever builds a player's prompt -- never contains a vote.
+  The HTML replay still shows every vote to spectators, just sourced from
+  `vote_log` instead of `public_log`.
+- **Tie showdowns**: a tied day-vote used to be resolved by an immediate
+  coin-flip (or `no_elimination`). Now a tie triggers a showdown -- the tied
+  players get a public turn to make their case, then *everyone* revotes with
+  choices narrowed to just the tied set, repeating until one player has sole
+  possession of the top vote count. Bounded by `max_showdown_rounds` (default
+  5, in `config/game_rules.yaml`); `tie_vote_policy` is now only the fallback
+  if a tie survives that many rounds.
+- **Summarizer fixed to be lazy**: the opt-in day-summarizer was firing every
+  single day regardless of whether `transcript_full_detail_days` actually
+  needed it yet -- burning a real API call on day 2 of a 3-day window for no
+  reason. Now it only summarizes the one day that's about to age out of the
+  window, right when that's about to happen, matching what the docstring
+  always claimed it did. Still off by default (`summarizer_model: null`).
+- **Raw model I/O log**: added a new per-game `games/<id>.raw.jsonl` --
+  distinct from the curated `.json`/`.html` replay -- with one line per LLM
+  call (every retry attempt included) recording the *exact* `system_prompt`,
+  `user_prompt`, and verbatim `response_text` sent/received, tagged with
+  `seat`, `model_key`, and a `purpose` (`night_mafia`, `day_vote`,
+  `day_showdown_defense`, `day_summary`, etc.). Written by
+  `GameState.log_raw_call`, called from every `PlayerAgent.ask()` attempt and
+  from the summarizer call site.
+- Verified all of the above with a real mock-only 8-player run: a genuine tie
+  occurred, triggered a showdown, resolved via revote, and no vote ever
+  leaked into the public transcript.
+
 ## Current state
 
-- 19 tests passing, all against the free mock provider (no API cost to run
+- 27 tests passing, all against the free mock provider (no API cost to run
   the suite).
 - Repo: https://github.com/LAKSHYAJAIN16/LLM-mafia
 - Games only run when explicitly requested -- this simulator makes real,

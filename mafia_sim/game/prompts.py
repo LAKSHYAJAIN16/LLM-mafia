@@ -80,6 +80,30 @@ def build_day_vote_prompt(state: GameState) -> str:
     )
 
 
+def build_day_showdown_defense_prompt(state: GameState, accused: list[str]) -> str:
+    others = ", ".join(accused)
+    return (
+        f"{state.public_transcript_text()}\n\n"
+        f"{_alive_line(state)}\n"
+        f"The vote was tied between: {others}. It is now a showdown -- if you are one "
+        "of the accused, make your case for why you should not be eliminated. If you "
+        "are not accused, you may weigh in on the two (or more) of them instead. "
+        "You may send 1 to 3 separate short messages this turn.\n"
+        f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", '
+        '"messages": ["<short public message>", "<optional 2nd message>", "<optional 3rd message>"]}'
+    )
+
+
+def build_day_showdown_vote_prompt(state: GameState, accused: list[str]) -> str:
+    options = ", ".join(accused)
+    return (
+        f"{state.public_transcript_text()}\n\n"
+        f"{_alive_line(state)}\n"
+        f"Showdown revote: choose which of the tied players to eliminate ({options}).\n"
+        f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "vote": "<exact player name>"}}'
+    )
+
+
 def build_night_mafia_prompt(state: GameState, player: Player) -> str:
     exclude = [p.seat for p in state.players if p.role == Role.MAFIA]
     return (

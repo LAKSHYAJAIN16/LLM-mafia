@@ -33,6 +33,7 @@ class ResultsLogger:
             "public_log": [dataclasses.asdict(e) for e in state.public_log],
             "mafia_log": [dataclasses.asdict(e) for e in state.mafia_log],
             "thought_log": [dataclasses.asdict(e) for e in state.thought_log],
+            "vote_log": [dataclasses.asdict(e) for e in state.vote_log],
             "day_votes": state.day_votes,
             "day_summaries": state.day_summaries,
             "format_failures": state.format_failures,
@@ -44,6 +45,13 @@ class ResultsLogger:
 
         with open(os.path.join(self.games_dir, f"{game_id}.html"), "w", encoding="utf-8") as f:
             f.write(render_game_html(full_record))
+
+        # Exact (system_prompt, user_prompt) -> raw response text for every single LLM
+        # call in the game (every retry attempt included), independent of how the
+        # engine/replay logs choose to render things -- one JSON object per line.
+        with open(os.path.join(self.games_dir, f"{game_id}.raw.jsonl"), "w", encoding="utf-8") as f:
+            for call in sorted(state.raw_calls, key=lambda c: c["seq"]):
+                f.write(json.dumps(call, default=str) + "\n")
 
         summary_record = {
             "game_id": game_id,

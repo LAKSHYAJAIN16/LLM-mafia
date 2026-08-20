@@ -76,14 +76,31 @@ class GameEngine:
     def _maybe_summarize_day(self, day: int) -> None:
         if not self.summarizer:
             return
-        speech = [e for e in self.state.public_log if e.day == day and e.kind == "speech"]
+        # Lazy, not eager: only summarize the one day that is about to fall out of
+        # the full-detail window as of *next* day's cutoff, so a game that never
+        # runs long enough to need a summary never pays for one.
+        target_day = day - self.state.transcript_full_detail_days
+        if target_day < 1 or target_day in self.state.day_summaries:
+            return
+        speech = [e for e in self.state.public_log if e.day == target_day and e.kind == "speech"]
         if not speech:
             return
         text = "\n".join(f"{e.speaker}: {e.text}" for e in speech)
-        summary, resp = summarize_day(self.summarizer, day, text, self.rules)
+        summary, resp, sys_prompt, user_prompt = summarize_day(self.summarizer, target_day, text, self.rules)
+        self.state.log_raw_call(
+            seat=None,
+            model_key=self.summarizer_key,
+            purpose="day_summary",
+            attempt=1,
+            system_prompt=sys_prompt,
+            user_prompt=user_prompt,
+            response_text=resp.text,
+            error=resp.error,
+            cost_usd=resp.cost_usd,
+        )
         self.state.add_cost(self.summarizer_key or "summarizer", resp.cost_usd)
         if summary:
-            self.state.day_summaries[day] = summary
+            self.state.day_summaries[target_day] = summary
 
     # -- night phase -----------------------------------------------------
 
@@ -103,6 +120,8 @@ class GameEngine:
                 prompts.build_night_mafia_prompt(state, p),
                 required_keys=["messages", "target"],
                 target_keys={"target": candidates},
+                seat=p.seat,
+                purpose="night_mafia",
             )
             state.log_thought("night", p.seat, str(reply.get("thought", "")))
             for msg in _extract_messages(reply):
@@ -121,6 +140,8 @@ class GameEngine:
                 prompts.build_night_doctor_prompt(state, p),
                 required_keys=["save"],
                 target_keys={"save": candidates},
+                seat=p.seat,
+                purpose="night_doctor",
             )
             state.log_thought("night", p.seat, str(reply.get("thought", "")))
             doctor_save = reply.get("save")
@@ -135,6 +156,8 @@ class GameEngine:
                 prompts.build_night_detective_prompt(state, p),
                 required_keys=["investigate"],
                 target_keys={"investigate": candidates},
+                seat=p.seat,
+                purpose="night_detective",
             )
             state.log_thought("night", p.seat, str(reply.get("thought", "")))
             target_seat = reply.get("investigate")
@@ -167,32 +190,14 @@ class GameEngine:
                     prompts.build_system_prompt(state, p),
                     prompts.build_day_discussion_prompt(state),
                     required_keys=["messages"],
+                    seat=p.seat,
+                    purpose="day_discussion",
                 )
                 state.log_thought("day", p.seat, str(reply.get("thought", "")))
                 for msg in _extract_messages(reply):
                     state.log_public("day", "speech", msg, speaker=p.seat)
 
-        order = state.alive_players()
-        random.shuffle(order)
-        votes: dict[str, str] = {}
-        for p in order:
-            candidates = [s.seat for s in state.alive_players()]
-            reply = self.agents[p.seat].ask(
-                state,
-                prompts.build_system_prompt(state, p),
-                prompts.build_day_vote_prompt(state),
-                required_keys=["vote"],
-                target_keys={"vote": candidates},
-            )
-            state.log_thought("day", p.seat, str(reply.get("thought", "")))
-            target = reply.get("vote")
-            if target:
-                votes[p.seat] = target
-                state.log_public("day", "vote", f"{p.seat} votes for {target}", speaker=p.seat)
-
-        state.day_votes.append({"day": state.day, "votes": votes})
-
-        voted_out = _resolve_vote(votes, self.rules.get("tie_vote_policy", "random"))
+        voted_out = self._run_vote_with_showdowns()
         if voted_out:
             state.kill(voted_out, "voted_out")
             if self.rules.get("reveal_role_on_death"):
@@ -203,6 +208,90 @@ class GameEngine:
         else:
             state.log_public("day", "system", "The vote was tied; no one died.")
 
+    def _run_vote_with_showdowns(self) -> str | None:
+        """Runs the day's ballot. Votes are secret -- see state.log_vote -- so no
+        player ever learns who voted for whom, only the eventual outcome. A tie at
+        the top goes to a showdown: the tied players get to publicly make their case,
+        then everyone revotes among just the tied set. Repeats (bounded by
+        max_showdown_rounds) until one player has sole possession of the most votes.
+        """
+        state = self.state
+        max_rounds = self.rules.get("max_showdown_rounds", 5)
+        candidates = [p.seat for p in state.alive_players()]
+
+        round_num = 0
+        while True:
+            round_num += 1
+            votes = self._collect_votes(candidates, round_num)
+            state.day_votes.append({"day": state.day, "round": round_num, "votes": votes})
+
+            if not votes:
+                return None
+            counts = Counter(votes.values())
+            top = counts.most_common()
+            best_count = top[0][1]
+            tied = [name for name, c in top if c == best_count]
+            if len(tied) == 1:
+                return tied[0]
+
+            if round_num >= max_rounds:
+                if self.rules.get("tie_vote_policy", "random") == "no_elimination":
+                    return None
+                return random.choice(tied)
+
+            state.log_public(
+                "day",
+                "system",
+                f"The vote is tied between {', '.join(tied)}. Showdown: each gets to make their case before a revote.",
+            )
+            self._run_showdown_defense(tied)
+            candidates = tied
+
+    def _collect_votes(self, candidates: list[str], round_num: int) -> dict[str, str]:
+        state = self.state
+        order = state.alive_players()
+        random.shuffle(order)
+        votes: dict[str, str] = {}
+        for p in order:
+            if round_num == 1:
+                prompt = prompts.build_day_vote_prompt(state)
+            else:
+                prompt = prompts.build_day_showdown_vote_prompt(state, candidates)
+            reply = self.agents[p.seat].ask(
+                state,
+                prompts.build_system_prompt(state, p),
+                prompt,
+                required_keys=["vote"],
+                target_keys={"vote": candidates},
+                seat=p.seat,
+                purpose="day_vote" if round_num == 1 else "day_showdown_vote",
+            )
+            state.log_thought("day", p.seat, str(reply.get("thought", "")))
+            target = reply.get("vote")
+            if target:
+                votes[p.seat] = target
+                # Secret ballot: recorded for spectators/replay only, never fed back
+                # into public_transcript_text() -- see state.log_vote.
+                state.log_vote("day", p.seat, f"{p.seat} votes for {target}")
+        return votes
+
+    def _run_showdown_defense(self, accused: list[str]) -> None:
+        state = self.state
+        order = state.alive_players()
+        random.shuffle(order)
+        for p in order:
+            reply = self.agents[p.seat].ask(
+                state,
+                prompts.build_system_prompt(state, p),
+                prompts.build_day_showdown_defense_prompt(state, accused),
+                required_keys=["messages"],
+                seat=p.seat,
+                purpose="day_showdown_defense",
+            )
+            state.log_thought("day", p.seat, str(reply.get("thought", "")))
+            for msg in _extract_messages(reply):
+                state.log_public("day", "speech", msg, speaker=p.seat)
+
 
 def _majority_choice(proposals: list[str]) -> str | None:
     if not proposals:
@@ -211,18 +300,4 @@ def _majority_choice(proposals: list[str]) -> str | None:
     top = counts.most_common()
     best_count = top[0][1]
     winners = [name for name, c in top if c == best_count]
-    return random.choice(winners)
-
-
-def _resolve_vote(votes: dict[str, str], tie_policy: str) -> str | None:
-    if not votes:
-        return None
-    counts = Counter(votes.values())
-    top = counts.most_common()
-    best_count = top[0][1]
-    winners = [name for name, c in top if c == best_count]
-    if len(winners) == 1:
-        return winners[0]
-    if tie_policy == "no_elimination":
-        return None
     return random.choice(winners)
