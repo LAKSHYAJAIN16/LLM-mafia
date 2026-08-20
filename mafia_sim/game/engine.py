@@ -269,7 +269,9 @@ class GameEngine:
 
         opener = random.choice(alive)
         opener_msg = self._speak_opening(opener, budget)
-        priority: list[str] = _mentioned_seats(opener_msg, budget.keys(), opener.seat)
+        priority: list[str] = []
+        addressed_by: dict[str, tuple[str, str]] = {}
+        self._note_mentions(opener_msg, opener.seat, budget.keys(), priority, addressed_by)
 
         max_polls = self.rules.get("max_discussion_polls_per_day", 1000)
         quiet_limit = self.rules.get("discussion_silence_threshold", 6)
@@ -291,6 +293,7 @@ class GameEngine:
                 if seat in by_seat:
                     next_player = by_seat[seat]
                     break
+                addressed_by.pop(seat, None)  # no longer eligible -- drop the stale nudge
             if next_player is not None:
                 queue = [q for q in queue if q.seat != next_player.seat]
             else:
@@ -304,16 +307,32 @@ class GameEngine:
                 next_player = queue.pop(0)
 
             polls_used += 1
-            msg = self._poll_speak(next_player, budget)
+            nudge = addressed_by.pop(next_player.seat, None)
+            msg = self._poll_speak(next_player, budget, addressed_by=nudge)
             if msg is not None:
                 consecutive_quiet = 0
-                for seat in _mentioned_seats(msg, budget.keys(), next_player.seat):
-                    if seat not in priority:
-                        priority.append(seat)
+                self._note_mentions(msg, next_player.seat, budget.keys(), priority, addressed_by)
             else:
                 consecutive_quiet += 1
                 if consecutive_quiet >= quiet_limit:
                     break
+
+    @staticmethod
+    def _note_mentions(
+        text: str,
+        speaker_seat: str,
+        valid_seats,
+        priority: list[str],
+        addressed_by: dict[str, tuple[str, str]],
+    ) -> None:
+        """Records who a message named, so they jump the discussion queue next and
+        get told directly they were addressed (see _poll_speak) -- the difference
+        between a fair rotation and a conversation that actually responds to itself.
+        """
+        for seat in _mentioned_seats(text, valid_seats, speaker_seat):
+            if seat not in priority:
+                priority.append(seat)
+            addressed_by[seat] = (speaker_seat, text)
 
     def _speak_opening(self, p, budget: dict[str, int]) -> str:
         state = self.state
@@ -331,16 +350,23 @@ class GameEngine:
         budget[p.seat] -= 1
         return msg
 
-    def _poll_speak(self, p, budget: dict[str, int]) -> str | None:
+    def _poll_speak(
+        self, p, budget: dict[str, int], addressed_by: tuple[str, str] | None = None
+    ) -> str | None:
         """Asks one player whether they want to speak right now. Returns their
         message (and posts it) if they chose to speak, None if they chose to think
         or stay silent -- in which case nothing public happens this turn.
+        addressed_by, if set, is (seat, message) of whoever just named this player --
+        surfaced explicitly in the prompt so it actually reads as being put on the
+        spot, not just something they might notice buried in the transcript.
         """
         state = self.state
         reply = self.agents[p.seat].ask(
             state,
             prompts.build_system_prompt(state, p),
-            prompts.build_day_discussion_poll_prompt(state, budget[p.seat], MAX_MESSAGES_PER_DAY),
+            prompts.build_day_discussion_poll_prompt(
+                state, budget[p.seat], MAX_MESSAGES_PER_DAY, addressed_by=addressed_by
+            ),
             required_keys=["action"],
             seat=p.seat,
             purpose="day_discussion_poll",

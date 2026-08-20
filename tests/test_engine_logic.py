@@ -257,6 +257,7 @@ def test_addressed_players_jump_the_discussion_queue(monkeypatch):
 
     state = GameState(players=_villagers(4))
     call_order: list[str] = []
+    prompts_seen: dict[str, str] = {}
 
     class RecordingAgent:
         def __init__(self, opening_message: str | None = None):
@@ -264,6 +265,7 @@ def test_addressed_players_jump_the_discussion_queue(monkeypatch):
 
         def ask(self, state, system_prompt, user_prompt, required_keys, target_keys=None, seat=None, purpose=""):
             call_order.append(seat)
+            prompts_seen[f"{seat}#{len(call_order)}"] = user_prompt
             if purpose == "day_discussion_open":
                 return {"thought": "", "message": self.opening_message or "just opening"}
             return {"thought": "", "action": "pass", "message": ""}
@@ -286,6 +288,12 @@ def test_addressed_players_jump_the_discussion_queue(monkeypatch):
     # just asked something.
     assert call_order[0] == "Player1"
     assert call_order[1] == "Player4"
+    # And it's not just queue order -- Player4's own prompt explicitly says they
+    # were addressed, so the model actually knows it's being put on the spot rather
+    # than having to notice it buried in the transcript.
+    player4_prompt = prompts_seen["Player4#2"]
+    assert "Player1 just addressed you directly" in player4_prompt
+    assert "Player4, what do you think?" in player4_prompt
 
 
 class ScriptedDiscussionAgent:

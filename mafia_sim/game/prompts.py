@@ -76,17 +76,28 @@ def build_day_discussion_open_prompt(state: GameState) -> str:
     )
 
 
-def build_day_discussion_poll_prompt(state: GameState, remaining_budget: int, max_per_day: int) -> str:
+def build_day_discussion_poll_prompt(
+    state: GameState, remaining_budget: int, max_per_day: int, addressed_by: tuple[str, str] | None = None
+) -> str:
+    nudge = ""
+    if addressed_by:
+        from_seat, quote = addressed_by
+        nudge = (
+            f"\n{from_seat} just addressed you directly: \"{quote}\" -- this is your moment to "
+            "respond. You don't have to, but ignoring a direct question repeatedly looks evasive.\n"
+        )
     return (
         f"{state.public_transcript_text()}\n\n"
         f"{_alive_line(state)}\n"
         "Day discussion is open. This is a real back-and-forth conversation, not a "
         "fixed order -- anyone alive can jump in whenever they actually have "
         "something worth saying, and you can react to what others just said. You "
-        f"have {remaining_budget} of {max_per_day} messages left today. Decide right "
-        "now: do you want to speak (send exactly one short message), just think it "
-        "over privately without saying anything yet, or stay silent for now? You can "
-        "still speak later if you stay silent now and still have messages left.\n"
+        f"have {remaining_budget} of {max_per_day} messages left today."
+        f"{nudge}"
+        " Decide right now: do you want to speak (send exactly one short message), "
+        "just think it over privately without saying anything yet, or stay silent "
+        "for now? You can still speak later if you stay silent now and still have "
+        "messages left.\n"
         "This is just a quick gut-check, not a full strategy session -- a brief "
         "one-line \"thought\" is fine here. Save your real multi-sentence analysis for "
         "when you actually decide to speak, vote, or act at night.\n"
