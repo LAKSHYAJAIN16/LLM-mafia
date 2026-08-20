@@ -204,6 +204,12 @@ button.active {
   color: var(--text-dim-2);
   font-size: 0.85rem;
 }
+.entry-reveal {
+  background: #1a2420;
+  border-left: 3px solid var(--town);
+  color: var(--text-dim-2);
+  font-size: 0.85rem;
+}
 .speaker {
   font-weight: 600;
   margin-right: 0.4rem;

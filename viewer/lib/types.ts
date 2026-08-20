@@ -1,7 +1,7 @@
 export type Role = "mafia" | "detective" | "doctor" | "villager";
 export type Winner = "mafia" | "town" | null;
 export type DeathCause = "voted_out" | "killed" | null;
-export type LogKind = "system" | "speech" | "vote" | "mafia_chat" | "thought";
+export type LogKind = "system" | "speech" | "vote" | "mafia_chat" | "thought" | "reveal";
 export type Phase = "day" | "night";
 
 export interface Player {
@@ -38,6 +38,7 @@ export interface GameRecord {
   mafia_log: LogEntry[];
   thought_log: LogEntry[];
   vote_log: LogEntry[];
+  reveal_log?: LogEntry[]; // optional: absent in games saved before this field existed
   day_votes: DayVoteRound[];
   day_summaries: Record<string, string>;
   format_failures: Record<string, number>;

@@ -17,6 +17,7 @@ export function buildTimeline(record: GameRecord): TimelineItem[] {
     ...record.mafia_log,
     ...record.thought_log,
     ...record.vote_log,
+    ...(record.reveal_log ?? []),
   ].sort((a, b) => a.seq - b.seq);
 
   const items: TimelineItem[] = [];
@@ -64,6 +65,7 @@ export const KIND_LABELS: Record<string, string> = {
   speech: "speech",
   vote: "vote",
   system: "system",
+  reveal: "outcome",
 };
 
 export const CAUSE_LABELS: Record<string, string> = {
