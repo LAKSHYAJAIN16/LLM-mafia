@@ -304,9 +304,51 @@ both aimed at the same root cause:
   money would risk reintroducing the reasoning-token starvation bug just fixed
   for Gemini/GLM.
 
+User then set a standing rule: commit and push after every change from now
+on, not just when asked -- saved to memory (`feedback_commit_push_always`).
+
+## Hard $1 cost cap, cost visible on the HTML replay, and a Next.js viewer
+
+- **`max_cost_usd: 1.00`** (`config/game_rules.yaml`): a hard per-game
+  spending cap, previously nonexistent. Checked at three points so a single
+  expensive day can't blow past it before the next check: before each new
+  day/night in `GameEngine.run()`, inside the discussion polling loop, and
+  before each showdown revote (falls back to `tie_vote_policy` immediately
+  instead of paying for more rounds). Hitting it ends the game early as a
+  draw with a public system message recording why -- same treatment as
+  hitting `max_days`.
+- **Cost was missing from the HTML replay** -- `total_cost_usd` was already
+  computed and saved to the JSON, just never rendered. Added to the `.meta`
+  line next to winner/days in `html_report.py`.
+- **New `viewer/` Next.js app** (App Router, TypeScript, no extra UI
+  libraries yet). User wants a more complex UI than server-rendered Python
+  string templates can comfortably grow into. Scoped via two explicit
+  decisions: keep the existing static per-game HTML generator as-is
+  (untouched, still runs for every game) rather than replacing it, and have
+  the new app read `results/games/*.json` directly off disk server-side
+  (`MAFIA_RESULTS_DIR` env override) rather than a fully static
+  upload-a-file app -- matches how everything else in this project already
+  runs locally.
+  - `lib/types.ts` / `lib/games.ts` / `lib/transcript.ts` mirror
+    `logger.py`'s JSON shape and `html_report.py`'s seq-merge transcript
+    logic 1:1 -- documented in both places to keep them in sync by hand,
+    since there's no shared schema yet.
+  - `app/page.tsx` -- games list (winner/days/cost/format-failure-count per
+    game). `app/games/[id]/page.tsx` -- one game's cast table + transcript
+    (server component, reads the file directly). `app/games/[id]/Transcript.tsx`
+    -- the step-through/play controls, ported from the vanilla JS in
+    `html_report.py` into a client component with React state.
+  - Verified against real game JSON with `npm run build` (clean, TypeScript
+    strict) and a live `npm run dev` + curl pass: games list populated
+    correctly, a real game's cast/roles/cost/full merged transcript (all 5
+    entry kinds) all rendered right.
+  - `next.config.ts` sets `agentRules: false` -- stops `next dev`/`build`
+    from regenerating AGENTS.md/CLAUDE.md every run (this repo has its own
+    conventions).
+
 ## Current state
 
-- 36 tests passing, all against the free mock provider (no API cost to run
+- 40 tests passing, all against the free mock provider (no API cost to run
   the suite).
 - Repo: https://github.com/LAKSHYAJAIN16/LLM-mafia
 - Games only run when explicitly requested -- this simulator makes real,
@@ -317,3 +359,6 @@ both aimed at the same root cause:
   Google.
 - Per explicit user instruction: commit and push after every change, not just
   when asked.
+- Two replay viewers now exist and both need updating if the game JSON shape
+  changes: `mafia_sim/sim/html_report.py` (static, Python) and `viewer/`
+  (Next.js, reads the same JSON files independently -- no shared schema).

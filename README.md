@@ -19,15 +19,22 @@ leaderboard to see which model is actually best at deception and deduction.
   transcript (and mafia-only chat, if it's mafia) plus its private notes, and
   must respond with a strict JSON object -- a private `thought` (real, unrestricted
   reasoning that no other player ever sees) plus whatever public field the
-  phase needs: `messages` (1-3 short chat-style messages), `vote`, `target`,
-  `save`, or `investigate`. Malformed output is retried, then falls back to a
-  random legal action -- also tracked as a `format_failures` stat per model.
+  phase needs: `message`/`action`, `vote`, `target`, `save`, or `investigate`.
+  Malformed output is retried, then falls back to a random legal action --
+  also tracked as a `format_failures` stat per model.
 - Night phase: mafia privately discuss and pick a kill target by majority
-  vote among themselves; doctor picks someone to protect; detective learns
-  one player's *exact role* (not just team). Day phase: public discussion
-  round(s), then a vote to eliminate one player. Every death is announced to
-  the models simply as "died" -- no "lynched"/"killed" jargon anywhere a
-  model can see it.
+  vote among themselves; doctor picks someone to protect (and learns whether
+  it mattered); detective learns one player's *exact role* (not just team).
+  Day phase is an open floor, not a fixed speaking order: one random player
+  opens, then every alive player with messages left (max 3/day) gets tapped
+  in turn to decide whether to speak, think privately, or pass -- a real
+  back-and-forth, not everyone forced to talk every round. Then a **secret**
+  ballot (nobody ever learns who voted for whom, only the outcome); a tie at
+  the top triggers a showdown -- the tied players publicly make their case,
+  then everyone revotes among just the tied set, repeating until one player
+  has sole possession of the most votes. Every death is announced to the
+  models simply as "died" -- no "lynched"/"killed" jargon anywhere a model
+  can see it.
 - Results are logged per-game (`results/games/*.json` full transcripts --
   including every private `thought` and, if a summarizer is configured, each
   day's digest -- plus `results/games/*.html`, a self-contained replay viewer,
@@ -71,23 +78,34 @@ full transcript with each player's private `thought` interleaved in true
 chronological order, a spoiler-gated cast/role reveal, and step-through/play
 controls to watch it unfold turn by turn; open it directly in a browser.
 
-Cost note: each game makes many real API calls (one per player per
-discussion round, plus votes and night actions). Start with a small
-`--games`/`--players` count to gauge cost before running a large tournament.
-Live cost is tracked per model and printed after every game (and totaled at
-the end of a run) whenever the provider reports it -- OpenRouter does, via
-`usage.cost`; the `leaderboard` command also breaks down total/avg/per-win
-cost per model. A few things in `config/game_rules.yaml` are already tuned to
-bound spend: `max_days: 12` (caps the worst case) and
-`transcript_full_detail_days: 3` -- older day-by-day discussion text is
-dropped from the prompt (deaths and votes stay for the whole game since
-they're short and strategically important), so prompt size doesn't grow
-quadratically over a long game. Optionally set `summarizer_model` to a
-roster key to compress each day into one sentence instead of dropping it
-outright once it ages out of that window (costs one small extra call/day).
-`max_tokens: 500` gives room for a real private `thought` -- the model's
-actual private reasoning space, unrestricted, and never shown to other
-players.
+Cost note: each game makes many real API calls (day discussion polls each
+alive player in turn every time it's their tap, plus votes and night
+actions). Start with a small `--games`/`--players` count to gauge cost before
+running a large tournament. Live cost is tracked per model and printed after
+every game (and totaled at the end of a run) whenever the provider reports
+it -- OpenRouter does, via `usage.cost`; the `leaderboard` command also
+breaks down total/avg/per-win cost per model. `config/game_rules.yaml` has
+several things tuned to bound spend:
+- `max_cost_usd: 1.00` -- a hard per-game spending cap, checked between
+  phases and inside the discussion/showdown loops, so one runaway game can't
+  blow past it; the game just ends early as a draw if hit.
+- `max_days: 12` caps the worst case in turns.
+- `discussion_silence_threshold: 4` ends a day's discussion after 4
+  consecutive declines in a row rather than polling every remaining player
+  every time -- the main lever against the open-floor discussion getting
+  expensive on quiet days.
+- `transcript_full_detail_days: 3` -- older day-by-day discussion text is
+  dropped from the prompt (deaths stay for the whole game since they're short
+  and strategically important), so prompt size doesn't grow quadratically
+  over a long game. Optionally set `summarizer_model` to a roster key to
+  compress each day into one sentence instead of dropping it outright once it
+  ages out of that window (costs one small extra call/day).
+
+`max_tokens: 1400` gives room for a real private `thought` plus the JSON
+structure around it -- extended-thinking models can consume much of this on
+invisible reasoning tokens before writing anything visible, which is also why
+this shouldn't be set too low (some models will otherwise never manage to
+close their JSON at all).
 
 ## Editing the roster
 
@@ -110,6 +128,21 @@ python -m mafia_sim.cli run --games 20 --players 8 --models config/models.openro
 The two roster files are independent -- `config/models.yaml` (direct provider
 APIs) is untouched by this and still works on its own once those providers'
 keys have credit.
+
+## Viewer
+
+Every finished game gets a self-contained `results/games/<id>.html` replay
+viewer -- open it directly in a browser, no server needed. For a richer,
+interactive UI there's also `viewer/`, a Next.js app that reads the same
+`results/games/*.json` files:
+
+```
+cd viewer
+npm install
+npm run dev
+```
+
+See `viewer/README.md` for details.
 
 ## Tests
 
