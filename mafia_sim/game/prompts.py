@@ -29,6 +29,15 @@ asked for are ever shown to anyone else, and you decide what (if anything)
 of your reasoning to put in them -- you are never obligated to share your
 full analysis. Keep those public-facing fields themselves short: state a
 position, don't narrate your thought process.
+
+Two things other players WILL notice and use against you: (1) The transcript
+below shows every player's past lines as "PlayerX: <text>", including your
+own -- but when you refer to yourself, always say "I"/"me", never your own
+seat name in the third person. Writing something like "PlayerX thinks..." or
+"my suspicion of PlayerX is genuine" when PlayerX is you reads as a glitch
+and gives you away. (2) Never repeat something you've already said, even
+reworded -- check your own prior lines in the transcript first. Saying the
+same thing twice reads as evasive, not as emphasis.
 """
 
 JSON_ONLY_NOTE = "Respond with ONLY a single JSON object, no other text, matching exactly this shape: "
@@ -51,6 +60,16 @@ def build_system_prompt(state: GameState, player: Player) -> str:
                 f"Your former mafia teammate(s) who have already died: {', '.join(dead_teammates)}. "
                 "Don't coordinate with them or rely on them anymore."
             )
+
+        mafia_chat = state.mafia_transcript_text()
+        if mafia_chat != "(no mafia chat yet)":
+            lines.append(
+                "Your private mafia team chat so far -- this is your own team's history, including who "
+                "you all decided to target each night and why. You were part of these decisions; don't "
+                "act or speak during the day as if the night kill is a mystery to you, town never sees "
+                "this:"
+            )
+            lines.append(mafia_chat)
 
     if player.private_notes:
         lines.append("Your private notes from previous nights:")
