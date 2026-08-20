@@ -16,6 +16,7 @@ h1 { font-size: 1.3rem; margin: 0 0 0.25rem; }
 .winner-mafia { color: #ff6b6b; font-weight: 600; }
 .winner-town { color: #6bcB77; font-weight: 600; }
 .winner-draw { color: #d9c46b; font-weight: 600; }
+.cost { color: #e6e6ea; font-weight: 600; }
 details.cast {
   background: #1c1f28; border: 1px solid #2a2e3a; border-radius: 10px;
   padding: 0.75rem 1rem; margin-bottom: 1.5rem;
@@ -94,6 +95,7 @@ def render_game_html(record: dict) -> str:
     days = record.get("days", 0)
     players = record.get("players", [])
     day_summaries = record.get("day_summaries", {})
+    total_cost = record.get("total_cost_usd", 0.0)
 
     rows = "\n".join(_player_row(p) for p in players)
 
@@ -147,6 +149,7 @@ def render_game_html(record: dict) -> str:
   <h1>Mafia replay: {escape(game_id)}</h1>
   <div class="meta">
     Winner: <span class="{_winner_class(winner)}">{winner_label}</span> &middot; {days} day(s)
+    &middot; Cost: <span class="cost">${total_cost:.4f}</span>
   </div>
 
   <details class="cast">
