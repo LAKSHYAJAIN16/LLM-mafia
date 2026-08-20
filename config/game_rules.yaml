@@ -38,16 +38,16 @@ max_cost_share_per_model: 0.5
 # addressed by name (e.g. "Player2, Player3, what do you think?") jumps the queue,
 # so a direct question actually gets answered next turn instead of waiting for a
 # fair random cycle -- otherwise turns cycle fairly through everyone still eligible.
-# Each player gets at most 5 messages per day (hardcoded --
-# mafia_sim/game/engine.py:MAX_MESSAGES_PER_DAY). A real conversation doesn't poll
-# every participant before concluding the room's gone quiet, so discussion ends after
-# discussion_silence_threshold consecutive declines in a row -- not only once
+# Each player gets at most this many messages per day. A real conversation doesn't
+# poll every participant before concluding the room's gone quiet, so discussion ends
+# after discussion_silence_threshold consecutive declines in a row -- not only once
 # literally everyone has individually passed. This is also the main cost lever: the
 # expensive case is always the tail end of a day where nobody has anything left to
 # add, and this stops that from costing one call per remaining player. Raised from 3/4
-# to 5/6 -- the tighter defaults made discussions feel too shallow; the $1 max_cost_usd
+# to 5/6 -- the tighter defaults made discussions feel too shallow; the $2 max_cost_usd
 # cap is the real backstop against this getting expensive on a long/chatty game now.
 # max_discussion_polls_per_day is only a hard safety backstop, not expected to bind.
+max_messages_per_day: 4
 discussion_silence_threshold: 6
 max_discussion_polls_per_day: 1000
 

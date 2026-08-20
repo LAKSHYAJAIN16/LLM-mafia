@@ -396,7 +396,7 @@ def test_discussion_ends_as_soon_as_everyone_passes():
 
 
 def test_discussion_caps_a_talkative_player_at_the_daily_message_limit():
-    from mafia_sim.game.engine import MAX_MESSAGES_PER_DAY
+    from mafia_sim.game.engine import DEFAULT_MAX_MESSAGES_PER_DAY
 
     state = GameState(players=_villagers(2))
     agents = {
@@ -410,8 +410,23 @@ def test_discussion_caps_a_talkative_player_at_the_daily_message_limit():
 
     p1_speeches = [e for e in state.public_log if e.speaker == "Player1"]
     p2_speeches = [e for e in state.public_log if e.speaker == "Player2"]
-    assert len(p1_speeches) == MAX_MESSAGES_PER_DAY  # hit the daily cap, never more
+    assert len(p1_speeches) == DEFAULT_MAX_MESSAGES_PER_DAY  # hit the daily cap, never more
     assert len(p2_speeches) <= 1  # only ever spoke if it happened to be the forced opener
+
+
+def test_discussion_honors_a_configured_max_messages_per_day():
+    state = GameState(players=_villagers(2))
+    agents = {
+        "Player1": ScriptedDiscussionAgent(action="speak", message="P1 talking"),
+        "Player2": ScriptedDiscussionAgent(action="pass"),
+    }
+    rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100, "max_messages_per_day": 2}
+    engine = GameEngine(state, agents, rules)
+
+    engine._run_discussion()
+
+    p1_speeches = [e for e in state.public_log if e.speaker == "Player1"]
+    assert len(p1_speeches) == 2
 
 
 def test_discussion_treats_speak_with_no_message_as_a_pass():

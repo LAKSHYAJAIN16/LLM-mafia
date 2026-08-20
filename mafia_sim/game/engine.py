@@ -21,7 +21,7 @@ class GameResult:
 
 
 MAX_MESSAGES_PER_TURN = 3  # burst cap for night mafia chat
-MAX_MESSAGES_PER_DAY = 5  # per-player daily budget for the open-floor day discussion
+DEFAULT_MAX_MESSAGES_PER_DAY = 5  # per-player daily budget for the open-floor day discussion, unless rules overrides it
 MIN_COST_FOR_SHARE_CHECK = 0.05  # don't judge cost-share until total spend is past pocket-change noise
 
 
@@ -297,7 +297,8 @@ class GameEngine:
         alive = state.alive_players()
         if not alive:
             return
-        budget = {p.seat: MAX_MESSAGES_PER_DAY for p in alive}
+        max_per_day = self.rules.get("max_messages_per_day", DEFAULT_MAX_MESSAGES_PER_DAY)
+        budget = {p.seat: max_per_day for p in alive}
 
         opener = random.choice(alive)
         opener_msg = self._speak_opening(opener, budget)
@@ -353,7 +354,7 @@ class GameEngine:
             polls_used += 1
             polled_today.add(next_player.seat)
             nudge = addressed_by.pop(next_player.seat, None)
-            msg = self._poll_speak(next_player, budget, addressed_by=nudge)
+            msg = self._poll_speak(next_player, budget, max_per_day, addressed_by=nudge)
             if msg is not None:
                 consecutive_quiet = 0
                 self._note_mentions(msg, next_player.seat, budget.keys(), priority, addressed_by)
@@ -397,7 +398,7 @@ class GameEngine:
         return msg
 
     def _poll_speak(
-        self, p, budget: dict[str, int], addressed_by: tuple[str, str] | None = None
+        self, p, budget: dict[str, int], max_per_day: int, addressed_by: tuple[str, str] | None = None
     ) -> str | None:
         """Asks one player whether they want to speak right now. Returns their
         message (and posts it) if they chose to speak, None if they chose to think
@@ -411,7 +412,7 @@ class GameEngine:
             state,
             prompts.build_system_prompt(state, p),
             prompts.build_day_discussion_poll_prompt(
-                state, budget[p.seat], MAX_MESSAGES_PER_DAY, addressed_by=addressed_by
+                state, budget[p.seat], max_per_day, addressed_by=addressed_by
             ),
             required_keys=["action"],
             seat=p.seat,
