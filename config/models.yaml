@@ -1,0 +1,107 @@
+# Roster of chatbot "players" the simulator can draw from.
+# Edit freely: add/remove models, fix model_id strings, disable ones you don't
+# have keys for. Nothing else in the codebase needs to change.
+#
+# provider must be one of: anthropic, google, openai_compat
+# For openai_compat, base_url is the provider's OpenAI-compatible chat
+# completions root (no trailing /chat/completions).
+
+models:
+  - key: claude-opus-5
+    display_name: "Claude Opus 5"
+    provider: anthropic
+    model_id: claude-opus-5
+    api_key_env: ANTHROPIC_API_KEY
+    enabled: true
+
+  - key: claude-sonnet-5
+    display_name: "Claude Sonnet 5"
+    provider: anthropic
+    model_id: claude-sonnet-5
+    api_key_env: ANTHROPIC_API_KEY
+    enabled: true
+
+  - key: claude-haiku-4-5
+    display_name: "Claude Haiku 4.5"
+    provider: anthropic
+    model_id: claude-haiku-4-5-20251001
+    api_key_env: ANTHROPIC_API_KEY
+    enabled: true
+
+  - key: gpt-5.1
+    display_name: "GPT-5.1"
+    provider: openai_compat
+    model_id: gpt-5.1
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    enabled: true
+
+  - key: gpt-5.1-mini
+    display_name: "GPT-5.1 Mini"
+    provider: openai_compat
+    model_id: gpt-5.1-mini
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    enabled: true
+
+  - key: gemini-2.5-pro
+    display_name: "Gemini 2.5 Pro"
+    provider: google
+    model_id: gemini-2.5-pro
+    api_key_env: GEMINI_API_KEY
+    enabled: true
+
+  - key: gemini-2.5-flash
+    display_name: "Gemini 2.5 Flash"
+    provider: google
+    model_id: gemini-2.5-flash
+    api_key_env: GEMINI_API_KEY
+    enabled: true
+
+  - key: grok-4
+    display_name: "Grok 4"
+    provider: openai_compat
+    model_id: grok-4
+    base_url: https://api.x.ai/v1
+    api_key_env: XAI_API_KEY
+    enabled: true
+
+  - key: mistral-large
+    display_name: "Mistral Large"
+    provider: openai_compat
+    model_id: mistral-large-latest
+    base_url: https://api.mistral.ai/v1
+    api_key_env: MISTRAL_API_KEY
+    enabled: true
+
+  - key: deepseek-chat
+    display_name: "DeepSeek Chat"
+    provider: openai_compat
+    model_id: deepseek-chat
+    base_url: https://api.deepseek.com/v1
+    api_key_env: DEEPSEEK_API_KEY
+    enabled: true
+
+  - key: llama-3.3-70b
+    display_name: "Llama 3.3 70B (Groq)"
+    provider: openai_compat
+    model_id: llama-3.3-70b-versatile
+    base_url: https://api.groq.com/openai/v1
+    api_key_env: GROQ_API_KEY
+    enabled: true
+
+  - key: command-a
+    display_name: "Cohere Command A"
+    provider: openai_compat
+    model_id: command-a-03-2025
+    base_url: https://api.cohere.com/compatibility/v1
+    api_key_env: COHERE_API_KEY
+    enabled: true
+
+  # Always available, no API key needed. Useful for testing the engine,
+  # and as a "random baseline" row on the leaderboard.
+  - key: mock-random
+    display_name: "Mock (random baseline)"
+    provider: mock
+    model_id: mock-random
+    enabled: true

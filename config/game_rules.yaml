@@ -1,0 +1,24 @@
+# Role composition by player count. Pick the entry whose player count matches;
+# "mafia"/"detective"/"doctor" counts, remainder are plain villagers.
+# These ratios follow common Mafia/Werewolf convention (~1 mafia per 3-4 players).
+
+role_setups:
+  5:  { mafia: 1, detective: 1, doctor: 0 }
+  6:  { mafia: 1, detective: 1, doctor: 1 }
+  7:  { mafia: 2, detective: 1, doctor: 1 }
+  8:  { mafia: 2, detective: 1, doctor: 1 }
+  9:  { mafia: 2, detective: 1, doctor: 1 }
+  10: { mafia: 3, detective: 1, doctor: 1 }
+  12: { mafia: 3, detective: 1, doctor: 1 }
+
+# Game-flow settings
+reveal_role_on_death: false   # if true, everyone learns the role of anyone killed/lynched
+discussion_rounds_per_day: 1  # how many speaking turns each alive player gets before voting
+max_days: 20                  # safety cap; game is declared a draw if exceeded
+tie_vote_policy: random       # 'random' or 'no_lynch' when the day vote is tied
+
+# LLM call settings
+temperature: 0.9
+max_tokens: 500
+max_format_retries: 2         # re-prompt attempts if a model's JSON can't be parsed
+request_timeout_seconds: 60
