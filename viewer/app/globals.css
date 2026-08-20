@@ -42,6 +42,20 @@ a {
   padding: 2rem 1rem 4rem;
 }
 
+.site-nav {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+.site-nav a {
+  color: var(--text-dim);
+  text-decoration: none;
+}
+.site-nav a:hover {
+  color: var(--text);
+}
+
 h1 {
   font-size: 1.4rem;
   margin: 0 0 0.25rem;
@@ -218,4 +232,130 @@ button.active {
   font-size: 0.7rem;
   color: var(--text-dim-2);
   margin-left: 0.4rem;
+}
+
+/* -- prompts page -- */
+.prompt-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.1rem;
+}
+.prompt-card h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.4rem;
+}
+.prompt-meta {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}
+.phase-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: 1px solid var(--border-2);
+}
+.phase-system {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.phase-day {
+  color: var(--draw);
+  border-color: var(--draw);
+}
+.phase-night {
+  color: var(--mafia);
+  border-color: var(--mafia);
+}
+.phase-meta {
+  color: var(--town);
+  border-color: var(--town);
+}
+.prompt-purpose {
+  font-size: 0.88rem;
+  color: var(--text-dim-2);
+  margin: 0.3rem 0 0.7rem;
+}
+.prompt-source {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+.prompt-text {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  margin: 0;
+  overflow-x: auto;
+}
+.placeholder-note {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+/* -- blog -- */
+.blog-row {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.95rem 1.1rem;
+  margin-bottom: 0.75rem;
+  transition: border-color 0.15s;
+}
+.blog-row:hover {
+  border-color: var(--border-2);
+}
+.blog-row h2 {
+  font-size: 1.05rem;
+  margin: 0 0 0.3rem;
+}
+.blog-date {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-bottom: 0.35rem;
+}
+.blog-summary {
+  font-size: 0.9rem;
+  color: var(--text-dim-2);
+  margin: 0;
+}
+.blog-body p {
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: var(--text-dim-2);
+}
+.commit-list {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0 0;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.commit-list li {
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--border);
+}
+.commit-hash {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  color: var(--accent);
+  margin-right: 0.5rem;
 }

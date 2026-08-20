@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SiteNav from "./components/SiteNav";
 import { listGames } from "@/lib/games";
 
 function winnerLabel(winner: string | null): string {
@@ -18,6 +19,7 @@ export default async function GamesListPage() {
 
   return (
     <div className="wrap">
+      <SiteNav />
       <h1>MafiaSim Replays</h1>
       <p className="subtitle">{games.length} game(s) found</p>
 
