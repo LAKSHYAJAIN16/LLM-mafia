@@ -6,6 +6,7 @@ import os
 from datetime import datetime, timezone
 
 from ..game.engine import GameResult
+from .html_report import render_game_html
 
 
 class ResultsLogger:
@@ -14,6 +15,10 @@ class ResultsLogger:
         self.games_dir = os.path.join(results_dir, "games")
         os.makedirs(self.games_dir, exist_ok=True)
         self.summary_path = os.path.join(results_dir, "summary.jsonl")
+
+    def html_path(self, game_id: str) -> str | None:
+        path = os.path.join(self.games_dir, f"{game_id}.html")
+        return path if os.path.exists(path) else None
 
     def save_game(self, game_index: int, result: GameResult) -> str:
         state = result.state
@@ -32,6 +37,9 @@ class ResultsLogger:
         }
         with open(os.path.join(self.games_dir, f"{game_id}.json"), "w", encoding="utf-8") as f:
             json.dump(full_record, f, indent=2, default=str)
+
+        with open(os.path.join(self.games_dir, f"{game_id}.html"), "w", encoding="utf-8") as f:
+            f.write(render_game_html(full_record))
 
         summary_record = {
             "game_id": game_id,

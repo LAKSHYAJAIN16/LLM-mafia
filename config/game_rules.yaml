@@ -14,11 +14,18 @@ role_setups:
 # Game-flow settings
 reveal_role_on_death: false   # if true, everyone learns the role of anyone killed/lynched
 discussion_rounds_per_day: 1  # how many speaking turns each alive player gets before voting
-max_days: 20                  # safety cap; game is declared a draw if exceeded
+max_days: 12                  # safety cap; game is declared a draw if exceeded (also bounds worst-case token spend)
 tie_vote_policy: random       # 'random' or 'no_lynch' when the day vote is tied
+
+# Cost control: full day-by-day discussion text older than this many days is
+# dropped from the prompt (system events -- deaths/lynches -- and votes stay
+# for the whole game either way, since they're short and strategically load-
+# bearing). Without this, every turn resends the entire game transcript, so
+# prompt size -- and cost -- grows roughly quadratically with game length.
+transcript_full_detail_days: 3
 
 # LLM call settings
 temperature: 0.9
-max_tokens: 500
-max_format_retries: 2         # re-prompt attempts if a model's JSON can't be parsed
+max_tokens: 350                 # JSON replies are short; this is plenty even for a full public message
+max_format_retries: 2           # re-prompt attempts if a model's JSON can't be parsed
 request_timeout_seconds: 60

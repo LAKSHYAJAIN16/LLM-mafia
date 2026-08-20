@@ -5,7 +5,7 @@ import random
 from ..agents.player_agent import PlayerAgent
 from ..game.engine import GameEngine, GameResult
 from ..game.roles import build_role_setup
-from ..game.state import GameState, Player
+from ..game.state import GameState, LogEntry, Player
 from ..providers.base import ChatProvider
 from ..providers.factory import ModelSpec
 from .logger import ResultsLogger
@@ -42,7 +42,7 @@ def _sample_model_keys(roster: Roster, player_count: int) -> list[str]:
 
 
 def setup_game(
-    roster: Roster, player_count: int, role_setups: dict, rules: dict
+    roster: Roster, player_count: int, role_setups: dict, rules: dict, on_event=None
 ) -> tuple[GameState, dict[str, PlayerAgent]]:
     chosen = _sample_model_keys(roster, player_count)
 
@@ -60,7 +60,12 @@ def setup_game(
         spec, provider = roster[model_key]
         agents[seat] = PlayerAgent(spec, provider, rules)
 
-    return GameState(players=players), agents
+    state = GameState(
+        players=players,
+        transcript_full_detail_days=rules.get("transcript_full_detail_days", 3),
+        on_event=on_event,
+    )
+    return state, agents
 
 
 def run_tournament(
@@ -71,10 +76,19 @@ def run_tournament(
     rules: dict,
     logger: ResultsLogger,
     on_game_done=None,
+    on_event=None,
 ) -> list[GameResult]:
     results: list[GameResult] = []
     for i in range(num_games):
-        state, agents = setup_game(roster, player_count, role_setups, rules)
+        state, agents = setup_game(roster, player_count, role_setups, rules, on_event=on_event)
+
+        if on_event:
+            # Spectator-only reveal of which model is behind each seat -- sent straight
+            # to the callback, never appended to state.public_log, so it never leaks
+            # into what the players themselves are prompted with.
+            cast = ", ".join(f"{p.seat}={roster[p.model_key][0].display_name}" for p in state.players)
+            on_event(LogEntry(0, "day", "cast", None, f"Cast: {cast}"))
+
         engine = GameEngine(state, agents, rules)
         result = engine.run()
         game_id = logger.save_game(i, result)

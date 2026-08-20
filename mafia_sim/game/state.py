@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Callable
 
 from .roles import Role
 
@@ -33,6 +34,8 @@ class GameState:
     day: int = 0
     day_votes: list[dict] = field(default_factory=list)  # [{day, votes: {voter: target}}]
     format_failures: dict[str, int] = field(default_factory=dict)  # model_key -> count
+    transcript_full_detail_days: int = 3  # older "speech" entries are dropped to bound prompt growth
+    on_event: Callable[[LogEntry], None] | None = field(default=None, repr=False, compare=False)
 
     def get(self, seat: str) -> Player:
         for p in self.players:
@@ -68,17 +71,29 @@ class GameState:
         p.death_cause = cause
 
     def log_public(self, phase: str, kind: str, text: str, speaker: str | None = None) -> None:
-        self.public_log.append(LogEntry(self.day, phase, kind, speaker, text))
+        entry = LogEntry(self.day, phase, kind, speaker, text)
+        self.public_log.append(entry)
+        if self.on_event:
+            self.on_event(entry)
 
     def log_mafia(self, kind: str, text: str, speaker: str | None = None) -> None:
-        self.mafia_log.append(LogEntry(self.day, "night", kind, speaker, text))
+        entry = LogEntry(self.day, "night", kind, speaker, text)
+        self.mafia_log.append(entry)
+        if self.on_event:
+            self.on_event(entry)
 
     def note_format_failure(self, model_key: str) -> None:
         self.format_failures[model_key] = self.format_failures.get(model_key, 0) + 1
 
     def public_transcript_text(self) -> str:
+        # System events (deaths/lynches) and votes are compact and stay in full for the
+        # whole game; verbose "speech" entries older than the detail window are dropped
+        # so prompt size doesn't grow quadratically over a long game.
+        cutoff = self.day - self.transcript_full_detail_days
         lines = []
         for e in self.public_log:
+            if e.kind == "speech" and e.day < cutoff:
+                continue
             if e.kind == "system":
                 lines.append(f"[Day {e.day}] {e.text}")
             else:
