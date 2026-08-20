@@ -135,17 +135,19 @@ def build_day_vote_prompt(state: GameState, player: Player) -> str:
     )
 
 
-def build_day_showdown_defense_prompt(state: GameState, accused: list[str]) -> str:
-    others = ", ".join(accused)
+def build_day_showdown_defense_prompt(state: GameState, player: Player, accused: list[str]) -> str:
+    rivals = ", ".join(s for s in accused if s != player.seat)
     return (
         f"{state.public_transcript_text()}\n\n"
         f"{_alive_line(state)}\n"
-        f"The vote was tied between: {others}. It is now a showdown -- if you are one "
-        "of the accused, make your case for why you should not be eliminated. If you "
-        "are not accused, you may weigh in on the two (or more) of them instead. "
-        "You may send 1 to 3 separate short messages this turn.\n"
+        f"The vote was tied between you and {rivals}. This is a showdown -- only the "
+        "tied players speak, and you each get exactly one turn before the table "
+        "revotes. This is your one real chance to make your case: address the "
+        "accusations against you directly, and make the case for why the table should "
+        "look at the other tied player instead. Unlike your usual short chat messages, "
+        "this is a real speech -- write a full paragraph, not a one-liner.\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", '
-        '"messages": ["<short public message>", "<optional 2nd message>", "<optional 3rd message>"]}'
+        '"speech": "<your full defense -- a real paragraph making your case>"}'
     )
 
 

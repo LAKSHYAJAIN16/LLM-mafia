@@ -86,5 +86,9 @@ temperature: 0.9
 # forcing a fallback to random moves every turn and making them look far less capable
 # than they are. 1400 leaves real room for both.
 max_tokens: 1400
+# A showdown speech is deliberately longer-form than a normal chat message -- a real
+# paragraph making a closing case, not a one-liner -- so it gets extra headroom on top
+# of the base max_tokens above. Falls back to max_tokens if unset.
+showdown_max_tokens: 2200
 max_format_retries: 2           # re-prompt attempts if a model's JSON can't be parsed
 request_timeout_seconds: 60

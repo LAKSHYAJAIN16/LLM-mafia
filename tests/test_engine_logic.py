@@ -65,12 +65,14 @@ class ScriptedAgent:
         self.votes = votes
         self.vote_calls = 0
 
-    def ask(self, state, system_prompt, user_prompt, required_keys, target_keys=None, seat=None, purpose=""):
+    def ask(
+        self, state, system_prompt, user_prompt, required_keys, target_keys=None, seat=None, purpose="", max_tokens=None
+    ):
         if "vote" in required_keys:
             vote = self.votes[min(self.vote_calls, len(self.votes) - 1)]
             self.vote_calls += 1
             return {"thought": "", "vote": vote}
-        return {"thought": "", "messages": ["making my case"]}
+        return {"thought": "", "speech": "making my case"}
 
 
 def test_showdown_resolves_a_tie_via_revote():
@@ -128,6 +130,37 @@ def test_showdown_falls_back_to_no_elimination_after_max_rounds():
 
     assert voted_out is None
     assert len(state.day_votes) == 3
+
+
+def test_showdown_defense_only_polls_the_tied_players_once_each_with_expanded_tokens():
+    state = GameState(players=_villagers(4))
+    state.day = 1
+    call_log: list[str] = []
+    max_tokens_seen: dict[str, int | None] = {}
+
+    class RecordingAgent:
+        def ask(
+            self, state, system_prompt, user_prompt, required_keys, target_keys=None, seat=None, purpose="", max_tokens=None
+        ):
+            if purpose == "day_showdown_defense":
+                call_log.append(seat)
+                max_tokens_seen[seat] = max_tokens
+            return {"thought": "", "speech": f"{seat} making a case"}
+
+    agents = {p.seat: RecordingAgent() for p in state.players}
+    rules = {"max_format_retries": 1, "showdown_max_tokens": 2200, "max_tokens": 1400}
+    engine = GameEngine(state, agents, rules)
+
+    engine._run_showdown_defense(["Player2", "Player3"])
+
+    # Only the two tied players get a turn -- not the whole table -- and each exactly once.
+    assert sorted(call_log) == ["Player2", "Player3"]
+    # And with the expanded showdown budget, not the base per-turn max_tokens.
+    assert max_tokens_seen["Player2"] == 2200
+    assert max_tokens_seen["Player3"] == 2200
+    speeches = [e for e in state.public_log if e.kind == "speech"]
+    assert {e.speaker for e in speeches} == {"Player2", "Player3"}
+    assert len(speeches) == 2  # one speech each, not a multi-message burst
 
 
 class _FixedNightAgent:

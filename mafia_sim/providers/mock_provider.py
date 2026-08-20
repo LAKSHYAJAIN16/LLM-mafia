@@ -39,6 +39,7 @@ class MockProvider(ChatProvider):
         payload: dict = {"thought": "random baseline move"}
         payload["messages"] = random.sample(pool, k=random.randint(1, 2))
         payload["message"] = payload["messages"][0]  # legacy single-message fallback path
+        payload["speech"] = "Mock baseline defense: nothing concrete to add, just playing it safe."
         combined = system_prompt + user_prompt
         for key in _ACTION_KEYS:
             if f'"{key}"' in combined and names:

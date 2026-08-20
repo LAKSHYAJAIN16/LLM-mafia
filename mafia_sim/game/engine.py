@@ -20,7 +20,7 @@ class GameResult:
     days: int
 
 
-MAX_MESSAGES_PER_TURN = 3  # burst cap for night mafia chat and showdown defense turns
+MAX_MESSAGES_PER_TURN = 3  # burst cap for night mafia chat
 MAX_MESSAGES_PER_DAY = 5  # per-player daily budget for the open-floor day discussion
 MIN_COST_FOR_SHARE_CHECK = 0.05  # don't judge cost-share until total spend is past pocket-change noise
 
@@ -28,7 +28,8 @@ MIN_COST_FOR_SHARE_CHECK = 0.05  # don't judge cost-share until total spend is p
 def _extract_messages(reply: dict) -> list[str]:
     """Pulls up to MAX_MESSAGES_PER_TURN non-empty strings out of a reply's
     "messages" list, falling back to the legacy single "message" key (used by
-    PlayerAgent's format-failure fallback) if "messages" wasn't provided.
+    PlayerAgent's format-failure fallback) if "messages" wasn't provided. Used for
+    night mafia chat only -- showdown defense is one longer speech, not a burst.
     """
     raw = reply.get("messages")
     if not isinstance(raw, list) or not raw:
@@ -505,21 +506,28 @@ class GameEngine:
         return votes
 
     def _run_showdown_defense(self, accused: list[str]) -> None:
+        """Only the tied players get to speak in a showdown, not the whole table --
+        each gets exactly one turn, but as a real speech (one longer paragraph, with
+        extra token headroom via showdown_max_tokens) rather than the usual short
+        chat-style burst.
+        """
         state = self.state
-        order = state.alive_players()
+        order = [p for p in state.alive_players() if p.seat in accused]
         random.shuffle(order)
+        max_tokens = self.rules.get("showdown_max_tokens") or self.rules.get("max_tokens", 500)
         for p in order:
             reply = self.agents[p.seat].ask(
                 state,
                 prompts.build_system_prompt(state, p),
-                prompts.build_day_showdown_defense_prompt(state, accused),
-                required_keys=["messages"],
+                prompts.build_day_showdown_defense_prompt(state, p, accused),
+                required_keys=["speech"],
                 seat=p.seat,
                 purpose="day_showdown_defense",
+                max_tokens=max_tokens,
             )
             state.log_thought("day", p.seat, str(reply.get("thought", "")))
-            for msg in _extract_messages(reply):
-                state.log_public("day", "speech", msg, speaker=p.seat)
+            speech = str(reply.get("speech", "")).strip() or "(no response)"
+            state.log_public("day", "speech", speech, speaker=p.seat)
 
 
 def _majority_choice(proposals: list[str]) -> str | None:

@@ -42,6 +42,7 @@ class PlayerAgent:
         target_keys: dict[str, list[str]] | None = None,
         seat: str | None = None,
         purpose: str = "",
+        max_tokens: int | None = None,
     ) -> dict:
         attempts = self.rules.get("max_format_retries", 2) + 1
 
@@ -50,7 +51,7 @@ class PlayerAgent:
                 system_prompt,
                 user_prompt,
                 temperature=self.rules.get("temperature", 0.9),
-                max_tokens=self.rules.get("max_tokens", 500),
+                max_tokens=max_tokens if max_tokens is not None else self.rules.get("max_tokens", 500),
                 timeout=self.rules.get("request_timeout_seconds", 60),
             )
             state.log_raw_call(
@@ -96,7 +97,12 @@ class PlayerAgent:
             return resolved
 
         state.note_format_failure(self.spec.key)
-        fallback: dict = {"thought": "", "message": "(no response)", "messages": ["(no response)"]}
+        fallback: dict = {
+            "thought": "",
+            "message": "(no response)",
+            "messages": ["(no response)"],
+            "speech": "(no response)",
+        }
         if target_keys:
             for key, candidates in target_keys.items():
                 if candidates:
