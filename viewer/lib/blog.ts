@@ -18,6 +18,21 @@ export type BlogPost = {
 
 export const POSTS: BlogPost[] = [
   {
+    slug: "detective-claim-nudge-and-message-cap-revert",
+    date: "2026-08-20",
+    title: "A detective claim nudge, and undoing an over-tightened message cap",
+    summary: "Two live-watched games in a row: the detective correctly IDed mafia and said nothing, and a 4-message daily cap was visibly rushing players.",
+    commits: [
+      { hash: "2c27f67", message: "Revert max_messages_per_day back to 5" },
+      { hash: "18cf1fc", message: "Give the detective a soft nudge to weigh claiming, once they have a real result" },
+    ],
+    body: [
+      "Watched two real 10-12 player games back to back. Both had the same shape: mafia manufactures a bandwagon on an innocent player using purely behavioral pretexts, town piles on without noticing the pattern, and in both games the detective correctly identified a mafia member and simply never said anything -- silently taking the read to the grave while town lost both times.",
+      "Previously declined to add a claim nudge (wanted gameplay to evolve naturally), but two real, repeated losses to the exact same failure mode changed that. build_system_prompt now gives the detective a framed tradeoff once they actually have an investigation result: claiming isn't free (a false claim invites a mafia counter-claim, going public paints a target), but sitting on a strong, decisive read forever helps nobody. It's a nudge to weigh the decision deliberately, not a scripted \"always claim.\"",
+      "Separately, max_messages_per_day (temporarily lowered to 4 for one run per an explicit request) went back to 5: in the very games that prompted the detective fix, a model literally cut its own defense short (\"I have 2 messages left, so I need to be efficient\") instead of finishing its actual reasoning -- the same shallowing effect the original tighter defaults had before they were raised to 5/6 earlier in the project.",
+    ],
+  },
+  {
     slug: "dynamic-speaking-rate-nudge",
     date: "2026-08-20",
     title: "An opt-in nudge based on a real research paper, off by default",
