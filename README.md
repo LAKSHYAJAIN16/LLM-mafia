@@ -86,7 +86,7 @@ every game (and totaled at the end of a run) whenever the provider reports
 it -- OpenRouter does, via `usage.cost`; the `leaderboard` command also
 breaks down total/avg/per-win cost per model. `config/game_rules.yaml` has
 several things tuned to bound spend:
-- `max_cost_usd: 1.00` -- a hard per-game spending cap, checked between
+- `max_cost_usd: 2.00` -- a hard per-game spending cap, checked between
   phases and inside the discussion/showdown loops, so one runaway game can't
   blow past it; the game just ends early as a draw if hit.
 - `max_cost_share_per_model: 0.5` -- guards against one model quietly

@@ -21,7 +21,7 @@ max_days: 12                  # safety cap; game is declared a draw if exceeded 
 # day can self-truncate instead of only being caught at the next day boundary -- the
 # game then ends early as a draw with a system message recording why, same as hitting
 # max_days. Set to null to disable (no cap).
-max_cost_usd: 1.00
+max_cost_usd: 2.00
 
 # Guards against one model quietly dominating a game's spend -- observed in a real
 # game where a single model (no errors, no retries, just expensive per token) alone

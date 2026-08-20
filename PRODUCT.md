@@ -20,7 +20,7 @@ No competitor runs this: strict vendor diversity (a game never seats two models 
 
 ## Operating Context
 
-Runs entirely locally today. A Python CLI (`mafia_sim`) plays real games against live provider APIs (OpenRouter, or direct per-provider keys) — each game costs real metered money (commonly $0.10–$1.00+, now hard-capped at $1/game). Finished games are saved as JSON in `results/games/`. Two viewers read that same JSON: a static per-game HTML replay, and this Next.js app (`viewer/`), which has an existing games list (`/`) and per-game replay page (`/games/[id]`). The `/home` page being designed now is a new, separate, stylized front door for the Next.js app — not yet wired into the live games list or real data (a self-contained showcase for this pass).
+Runs entirely locally today. A Python CLI (`mafia_sim`) plays real games against live provider APIs (OpenRouter, or direct per-provider keys) — each game costs real metered money (commonly $0.10–$2.00+, now hard-capped at $2/game). Finished games are saved as JSON in `results/games/`. Two viewers read that same JSON: a static per-game HTML replay, and this Next.js app (`viewer/`), which has an existing games list (`/`) and per-game replay page (`/games/[id]`). The `/home` page being designed now is a new, separate, stylized front door for the Next.js app — not yet wired into the live games list or real data (a self-contained showcase for this pass).
 
 ## Capabilities and Constraints
 
