@@ -346,19 +346,140 @@ on, not just when asked -- saved to memory (`feedback_commit_push_always`).
     from regenerating AGENTS.md/CLAUDE.md every run (this repo has its own
     conventions).
 
+## Real game #4 (OpenRouter, 15 players) -- biggest game yet, one real self-reference bug found
+
+Role setup for 15 corrected mid-request to `{ mafia: 3, detective: 1, doctor: 1 }`
+(`config/game_rules.yaml`). Live-monitored via the HTML replay after the game
+finished (`open up the html`).
+
+- **Real bug found from a screenshot**: a mafia player publicly speculated
+  about "the mafia" as if it were a separate outsider deciding kills, when
+  the mafia's own chat had made that exact kill decision. Root cause: mafia
+  players never got their own team's night-chat history carried into later
+  system prompts -- so a mafia player genuinely had no memory of a decision
+  it (or its silent teammate) already made. Fixed in `build_system_prompt`
+  (`mafia_sim/game/prompts.py`): when the player is mafia and
+  `mafia_transcript_text()` is nonempty, the full mafia chat history is now
+  injected into the system prompt with an explicit "you were part of these
+  decisions" framing.
+- **Two more bugs from the same investigation, both prompt-guardrail fixes
+  (not 100% eliminable, since it's model behavior, not a hard structural
+  bug)**: models sometimes referring to themselves in the third person by
+  seat name ("PlayerX thinks...") instead of "I", and near-duplicate
+  repeated lines across turns (worst on Llama 3.3 70B). Both addressed by
+  extending `RULES_BLOCK` with explicit warnings and a "check your own prior
+  lines first" instruction.
+
+## `/home`: a neon casino-style landing page
+
+Built via the `impeccable` design skill's full workflow (PRODUCT.md interview
+-> direction roll -> craft-floor self-review). Iterated live with the user
+through several rapid rounds: renamed to LLM-Mafia then reverted back to
+MAFIASIM; dropped a "real money on the table" line entirely (real-money
+framing was never accurate -- games use metered API cost, not stakes);
+removed a House Rules / Ledger / roster section that didn't earn its place;
+kept "MAFIA SIM" on one visual line; rebuilt the ticker as an actual
+scrolling marquee strip instead of a static kicker label (kickers are a
+banned craft-floor pattern); changed the CTA button's label to "Start a
+Game" (still just links to `/`, deliberately not wired to a real launch flow
+yet -- flagged to the user as a real-cost action pending their go-ahead).
+Also fixed an unrelated hydration warning caused by a browser extension
+(`data-phia-extension-fonts-loaded`) injecting an attribute onto `<html>`
+before React hydrates -- silenced with `suppressHydrationWarning`, the
+correct fix for exactly this class of extension-injected-DOM mismatch.
+
+## Reveal ordering, then a full log review with approved fixes
+
+Doctor/detective private "outcome" reveal messages (e.g. "you protected X --
+they were attacked and you saved them!") were being logged after *all*
+night actions resolved, so they showed up batched together in the replay
+instead of right after that player's own turn. Fixed by moving the doctor's
+reveal/private-note logic inline, immediately after `doctor_save` is read,
+so console and replay ordering now matches true turn order.
+
+User then asked for a full review of the latest game's raw logs for gameplay
+suggestions, to approve later. Four were found; three approved and shipped,
+one explicitly deferred ("I want gameplay to naturally evolve" --
+declined to add a nudge pushing the detective to claim its role):
+
+1. **OpenRouter routing hiccup** -- occasional HTTP 400 "does not support
+   endpoint: completions" from OpenRouter's multi-backend routing, previously
+   treated as a hard failure. Confirmed transient (retrying the identical
+   request succeeds), so `OpenAICompatProvider.call()` now retries it via
+   `with_backoff` the same as a 5xx, scoped to OpenRouter only.
+2. **Discussion fairness** -- the open-floor polling could let the room go
+   quiet (via `discussion_silence_threshold`) before every player had a
+   single turn that day. Fixed by tracking `polled_today` and forcing an
+   unseen player to speak before silence can end the day.
+3. **Cohere cost disparity** -- Cohere Command A was disproportionately
+   expensive in one game's cost breakdown for reasons distinct from the
+   Gemini/GLM reasoning-starvation bug; addressed as part of the same pass
+   (see `max_cost_share_per_model` below).
+4. *(Declined)* Nudging the detective to claim its role publicly.
+
+Also added `max_cost_share_per_model: 0.5` (`config/game_rules.yaml`) as a
+new guard distinct from the flat `max_cost_usd` cap: if any single model's
+cumulative spend exceeds this fraction of total game cost so far, the game
+ends early the same way hitting `max_cost_usd` does -- guards against one
+model quietly dominating a game's spend even while under the hard cap.
+Gated behind `MIN_COST_FOR_SHARE_CHECK` so one early expensive call can't
+look like "100% of spend" before spend has evened out.
+
+At the user's request, `max_cost_usd` was then raised from $1.00 to $2.00 --
+confirmed to be a pure config value in `game_rules.yaml`, not hardcoded.
+
+## Real game #5 (OpenRouter, 10 players) -- verifying the log-review fixes, then trimming the roster
+
+Ran and live-monitored specifically to confirm the three approved fixes above
+landed correctly in real play (not just unit tests). Afterward, the user
+asked to stop using the most expensive/least useful models going forward:
+`llama-3.3-70b-or` and `claude-sonnet-5-or` set to `enabled: false` in
+`config/models.openrouter.yaml`, joining `gemini-2.5-pro-or` and
+`glm-4.6-or` on the disabled list (Claude Sonnet 5 alone had accounted for
+~50% of one game's total spend; Llama 3.3 70B for its repetition problem
+above).
+
+## Showdown redesign: a real one-shot speech, not a chat burst
+
+User feedback: showdown defenses shouldn't poll the whole table the way
+normal day discussion does -- only the two (or more) tied players should get
+to speak, each exactly once, and it should read like a real closing
+statement rather than a short chat message.
+
+- `_run_showdown_defense()` (`mafia_sim/game/engine.py`) now iterates only
+  over `accused` seats (previously all alive players), calling `ask()` with
+  `required_keys=["speech"]` instead of the multi-message burst helper.
+- `build_day_showdown_defense_prompt()` (`mafia_sim/game/prompts.py`)
+  rewritten to ask for a single `"speech"` field explicitly framed as "a
+  real paragraph, not a one-liner," and to list only the *other* tied
+  player(s) as rivals (excludes the speaker's own seat).
+- New `showdown_max_tokens: 2200` (`config/game_rules.yaml`), separate from
+  the base `max_tokens: 1400` -- a real paragraph needs more headroom than a
+  normal turn. `PlayerAgent.ask()` gained an optional per-call `max_tokens`
+  override to support this without inflating every other call's budget.
+- `MockProvider` updated to always include a `"speech"` field so mock-only
+  games satisfy the new required key.
+
 ## Current state
 
-- 40 tests passing, all against the free mock provider (no API cost to run
+- 53 tests passing, all against the free mock provider (no API cost to run
   the suite).
 - Repo: https://github.com/LAKSHYAJAIN16/LLM-mafia
 - Games only run when explicitly requested -- this simulator makes real,
   metered API calls.
-- Roster notes (`config/models.openrouter.yaml`): `gemini-2.5-pro-or` and
-  `glm-4.6-or` are disabled (both confirmed to starve on invisible reasoning
-  tokens via real games, see above) -- `gemini-3.6-flash-or` still covers
-  Google.
+- Roster notes (`config/models.openrouter.yaml`): `gemini-2.5-pro-or`,
+  `glm-4.6-or`, `claude-sonnet-5-or`, and `llama-3.3-70b-or` are all disabled
+  (reasoning-token starvation for the first two, cost dominance for Claude
+  Sonnet 5, repetition for Llama 3.3 70B) -- `gemini-3.6-flash-or` still
+  covers Google.
 - Per explicit user instruction: commit and push after every change, not just
   when asked.
 - Two replay viewers now exist and both need updating if the game JSON shape
   changes: `mafia_sim/sim/html_report.py` (static, Python) and `viewer/`
   (Next.js, reads the same JSON files independently -- no shared schema).
+  `viewer/app/home/` also now holds the neon-casino `/home` landing page.
+- `max_cost_usd: 2.00`, `max_cost_share_per_model: 0.5` -- both hard backstops
+  against a single game (or a single model within a game) running away on
+  cost.
+- Showdown defenses are now a one-speech-each mechanic (`showdown_max_tokens:
+  2200`), distinct from normal day discussion's short chat-burst polling.
