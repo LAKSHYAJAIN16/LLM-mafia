@@ -80,9 +80,17 @@ class OpenAICompatProvider(ChatProvider):
             return ProviderResponse(text="", error=f"unexpected_response_shape: {str(data)[:300]}")
 
         usage = data.get("usage", {})
+        # Some models (observed with GLM-4.6 via OpenRouter) return HTTP 200 with a
+        # syntactically valid but completely empty message.content -- most likely their
+        # entire max_tokens budget got consumed by invisible reasoning tokens, the same
+        # failure mode as visibly-truncated reasoning models, just total instead of
+        # partial. Flagging it as an error here (rather than an empty "success") makes
+        # this self-explanatory in games/<id>.raw.jsonl without having to check length.
+        error = "empty_completion" if not text else None
         return ProviderResponse(
             text=text,
             prompt_tokens=usage.get("prompt_tokens", 0),
             completion_tokens=usage.get("completion_tokens", 0),
             cost_usd=float(usage.get("cost") or 0.0),
+            error=error,
         )

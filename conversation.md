@@ -166,10 +166,154 @@ companies.
   occurred, triggered a showdown, resolved via revote, and no vote ever
   leaked into the public transcript.
 
+## Real game #2 (OpenRouter, 8 players) -- showdown fires for real
+
+Cast: Mistral Large, Kimi K2, Cohere Command A, DeepSeek Chat, Grok 4.6,
+Llama 3.3 70B, Gemini 2.5 Pro, Qwen 2.5 72B.
+
+- Night 1 killed a villager; day 1 voted out another villager (no tie).
+  Night 2 killed a villager; day 2 correctly caught one mafia (Qwen).
+- **Day 3 produced a genuine 2-2 tie** between the detective and a villager --
+  the showdown mechanic fired for the first time in a real game: both got a
+  public defense turn, then a revote resolved it 3-1, eliminating the
+  detective (an unlucky mislynch, not a bug -- confirmed correct behavior).
+- Surviving mafia (Kimi K2) rode it to parity and won on night 4.
+- **Result: mafia wins**, 4 days, **$0.1803**, 20 secret votes recorded with
+  zero leaking into the transcript, 67 raw calls logged, 2 real format-failure
+  retries (Gemini 2.5 Pro, Mistral Large) handled gracefully.
+
+## Investigating Gemini 2.5 Pro, plus three real bugs found from real play
+
+User flagged: Gemini 2.5 Pro "never responds," wanted fuller live monitoring,
+suspected the bots don't really understand doctor/detective, and noticed a
+mafia member acting like it didn't know its teammate had died.
+
+- **Gemini 2.5 Pro root cause found, not just "swap the model"**: pulled
+  `games/<id>.raw.jsonl` and found every single response was 44-82 characters
+  vs. 300-2200 for every other model in the same game. Its extended-thinking
+  tokens count against `max_tokens` on OpenRouter's unified endpoint, so
+  almost the whole budget was invisible reasoning, leaving ~15-20 visible
+  tokens -- never enough to close the JSON. Disabled it in
+  `config/models.openrouter.yaml` (`gemini-3.6-flash-or`, unaffected, still
+  covers the Google seat); this is the same reason `max_tokens` went 500 ->
+  1400 in `game_rules.yaml` game-wide, since any reasoning-heavy model can hit
+  this.
+- **Real bug: mafia didn't know a teammate had died.** `build_system_prompt`
+  listed mafia teammates by role membership only, with no `alive` filter --
+  a lone surviving mafia player's system prompt kept saying "your teammate is
+  Player X" forever after X was voted out. Fixed to split alive vs. dead
+  teammates with an explicit "already died" note (`mafia_sim/game/prompts.py`).
+- **Doctor had no save feedback; detective's was fine.** The detective
+  already got an exact-role private note per investigation. The doctor picked
+  someone to protect and never learned whether it mattered. Added the same
+  kind of note: "you protected X -- they were attacked and you saved them!"
+  or "No attack landed on them that night" (`mafia_sim/game/engine.py`).
+- **Day-summarization wasn't actually failing** -- it's opt-in
+  (`summarizer_model: null`) and simply never ran in the first real game
+  (4 days, 3-day window, nothing ever aged out). The "context feels off"
+  impression was really the mafia-teammate bug above.
+
+## Real game #3 (OpenRouter, 10 players) -- verifying the fixes live
+
+Cast: DeepSeek Chat, Kimi K2, Claude Haiku 4.5, Llama 3.3 70B, GPT-5.5,
+GLM-4.6, Cohere Command A, Mistral Large, Grok 4.6, Gemini 3.6 Flash.
+Monitored with a wider live filter this time (day speech + mafia night-chat
+included, not just system/vote/cast events), full console output also teed
+to a log file.
+
+- Mafia (Kimi K2, GLM-4.6, Cohere Command A) killed a villager night 1. Town
+  correctly voted out Kimi K2 day 1 (6/9) after another player called out its
+  suspiciously eager, unprompted rush to assign blame.
+- **Confirmed the mafia-teammate-death fix working live**: the surviving
+  mafia's own night-2 chat opened with "Player2 is out, so it's just us two
+  now" -- correct real-time awareness instead of the old bug.
+- Mafia killed another villager night 2; town correctly voted out GLM-4.6
+  day 2 (6/7) after its silence under direct pressure became the read.
+  One villager was mislynched day 3 (still town-favored at that point).
+  Down to 1 mafia (Cohere Command A) vs. 2 town, the doctor (Mistral Large)
+  openly claimed to build trust, and the town correctly voted out the last
+  mafia day 4, 2-1, for a clean **town win**. $0.3289 total.
+- **Investigated two things flagged live, both resolved**:
+  - Mojibake (`shouldn't` rendering as `shouldn�t`) seen in the live console
+    turned out to be a Windows console codepage display artifact only --
+    confirmed zero `U+FFFD` characters in the actual saved `.json`/`.raw.jsonl`
+    data. Not a data bug; the earlier UTF-8 decode fix is still holding.
+  - Two real format-failure clusters, found via the raw log: GLM-4.6 returned
+    completely empty content (0 chars, HTTP 200, no error) on every attempt
+    across two separate turns, even at `max_tokens=1400` -- same failure class
+    as Gemini 2.5 Pro, just total starvation instead of partial. Disabled it
+    too. Grok 4.6 hit a genuine transient `502` ("model is currently at
+    capacity") from xAI -- a real provider outage, not a bug, and likely what
+    caused a multi-minute live-monitoring stall while it exhausted retries.
+  - While fixing this, found and fixed a related latent bug: `OpenAICompatProvider`
+    now flags a syntactically-valid-but-empty `message.content` as
+    `error="empty_completion"` instead of silently treating it as success, so
+    it's self-explanatory in `raw.jsonl` without checking response length by
+    hand. `PlayerAgent._track_cost` also now runs *before* the error-continue
+    check, since a provider still bills for an empty-but-real completion --
+    the old order would have silently undercounted spend for exactly this
+    case.
+
+## Persistent multi-turn chat: researched, not built
+
+Asked whether players could talk to their model like a continuous chat session
+instead of resending context every call. Answer given: no provider actually
+lets a model "remember" for free -- every request is stateless and the full
+context has to be resent regardless (that's true even of chatgpt.com/claude.ai;
+the website reconstructs the whole conversation every message). What *is* real
+and worth having eventually is prompt caching on a per-player growing message
+array (flagged as "a pure win" in an earlier session, never built) -- but that's
+a genuine architecture change (`ChatProvider.complete()` is a flat one-shot
+system+user call by design) with its own hard problem (the sliding-window +
+summarizer trick that bounds prompt growth today doesn't retrofit cleanly onto
+a persistent array you can't edit old turns out of). Shelved for later, not
+implemented.
+
+## Open-floor day discussion, then made it cheaper and more human
+
+First pass: replaced the fixed round-robin day discussion (every alive player
+forced to send 1-3 messages every round) with a real open floor -- one random
+player opens each day, then every alive player with a daily budget of 3
+messages gets polled each turn on whether to **speak** (one message), **think**
+privately, or **pass**; the model chooses. Ends once the room goes quiet.
+Verified end-to-end via mock game: message counts varied naturally per player
+per day (0-3), the cap held exactly.
+
+User's reaction: should feel human, and it costs more (flagged proactively --
+polling everyone who stays silent is a real API call every time). Two fixes,
+both aimed at the same root cause:
+- **Turn-taking, not a full sweep**: was asking every remaining candidate in
+  shuffled order each round until someone said yes (worst case: everyone
+  passes, that's N wasted calls right at the tail of every day). Changed to
+  tap exactly one player per turn, fairly cycling through everyone (a reshuffled
+  queue, not pure re-random-pick, so nobody gets starved of a turn) -- humans
+  don't poll the whole room before deciding it's gone quiet either.
+- **discussion_silence_threshold`** (default 4, `game_rules.yaml`): discussion
+  now ends after N consecutive declines in a row, not only once literally
+  everyone has individually passed -- this is the actual cost fix, since the
+  expensive case was always the wind-down tail where nobody has anything left
+  to add.
+- Also shortened the "thought" instruction specifically on poll prompts (a
+  brief one-line gut-check instead of "a few sentences of real analysis") --
+  deliberately *not* applied to the RULES_BLOCK's general framing or to any
+  real decision (votes, night actions, actual speech), since blanket-shrinking
+  "thought" everywhere was the exact mistake that hurt play quality in an
+  earlier session. This is scoped to the low-stakes "do I want to jump in right
+  now" check only.
+- `max_tokens` deliberately left untouched at 1400 -- lowering it to save
+  money would risk reintroducing the reasoning-token starvation bug just fixed
+  for Gemini/GLM.
+
 ## Current state
 
-- 27 tests passing, all against the free mock provider (no API cost to run
+- 36 tests passing, all against the free mock provider (no API cost to run
   the suite).
 - Repo: https://github.com/LAKSHYAJAIN16/LLM-mafia
 - Games only run when explicitly requested -- this simulator makes real,
   metered API calls.
+- Roster notes (`config/models.openrouter.yaml`): `gemini-2.5-pro-or` and
+  `glm-4.6-or` are disabled (both confirmed to starve on invisible reasoning
+  tokens via real games, see above) -- `gemini-3.6-flash-or` still covers
+  Google.
+- Per explicit user instruction: commit and push after every change, not just
+  when asked.

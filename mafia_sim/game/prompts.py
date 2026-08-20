@@ -39,11 +39,18 @@ def build_system_prompt(state: GameState, player: Player) -> str:
     lines.append(f"You are {player.seat}. Your secret role is: {player.role.value}.")
 
     if player.role == Role.MAFIA:
-        teammates = [p.seat for p in state.players if p.role == Role.MAFIA and p.seat != player.seat]
-        if teammates:
-            lines.append(f"Your fellow mafia teammate(s): {', '.join(teammates)}.")
+        teammates = [p for p in state.players if p.role == Role.MAFIA and p.seat != player.seat]
+        alive_teammates = [p.seat for p in teammates if p.alive]
+        dead_teammates = [p.seat for p in teammates if not p.alive]
+        if alive_teammates:
+            lines.append(f"Your fellow surviving mafia teammate(s): {', '.join(alive_teammates)}.")
         else:
             lines.append("You have no surviving mafia teammates -- you're on your own.")
+        if dead_teammates:
+            lines.append(
+                f"Your former mafia teammate(s) who have already died: {', '.join(dead_teammates)}. "
+                "Don't coordinate with them or rely on them anymore."
+            )
 
     if player.private_notes:
         lines.append("Your private notes from previous nights:")
@@ -58,15 +65,34 @@ def _alive_line(state: GameState, exclude: list[str] | None = None) -> str:
     return f"Alive players: {', '.join(names)}"
 
 
-def build_day_discussion_prompt(state: GameState) -> str:
+def build_day_discussion_open_prompt(state: GameState) -> str:
     return (
         f"{state.public_transcript_text()}\n\n"
         f"{_alive_line(state)}\n"
-        "It is the day discussion phase. Share your thoughts publicly. You may "
-        "send 1 to 3 separate short messages this turn, like sending a few "
-        "consecutive chat messages instead of one long one.\n"
+        "It is the day discussion phase, and you've been randomly chosen to open it. "
+        "Send one message to kick off the conversation.\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", '
-        '"messages": ["<short public message>", "<optional 2nd message>", "<optional 3rd message>"]}'
+        '"message": "<one short public message>"}'
+    )
+
+
+def build_day_discussion_poll_prompt(state: GameState, remaining_budget: int, max_per_day: int) -> str:
+    return (
+        f"{state.public_transcript_text()}\n\n"
+        f"{_alive_line(state)}\n"
+        "Day discussion is open. This is a real back-and-forth conversation, not a "
+        "fixed order -- anyone alive can jump in whenever they actually have "
+        "something worth saying, and you can react to what others just said. You "
+        f"have {remaining_budget} of {max_per_day} messages left today. Decide right "
+        "now: do you want to speak (send exactly one short message), just think it "
+        "over privately without saying anything yet, or stay silent for now? You can "
+        "still speak later if you stay silent now and still have messages left.\n"
+        "This is just a quick gut-check, not a full strategy session -- a brief "
+        "one-line \"thought\" is fine here. Save your real multi-sentence analysis for "
+        "when you actually decide to speak, vote, or act at night.\n"
+        f'{JSON_ONLY_NOTE}{{"thought": "<brief one-line gut check>", '
+        '"action": "speak" | "think" | "pass", '
+        '"message": "<exactly one short public message -- only if action is \'speak\', omit or leave empty otherwise>"}'
     )
 
 

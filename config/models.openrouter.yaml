@@ -62,6 +62,12 @@ models:
     open_source: false
     enabled: true
 
+  # Disabled 2026-08-20: in a real game, every single response from this model was
+  # 44-82 characters -- vs. 300-2200 for every other model in the same game -- because
+  # its extended-thinking tokens count against max_tokens on OpenRouter's unified
+  # endpoint, so almost the entire budget was consumed by invisible reasoning before
+  # any visible JSON could be written. Confirmed via games/<id>.raw.jsonl response
+  # lengths. gemini-3.6-flash-or below is unaffected and stands in as the Google seat.
   - key: gemini-2.5-pro-or
     display_name: "Gemini 2.5 Pro (OpenRouter)"
     provider: openai_compat
@@ -70,7 +76,7 @@ models:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     open_source: false
-    enabled: true
+    enabled: false
 
   - key: gemini-3.6-flash-or
     display_name: "Gemini 3.6 Flash (OpenRouter)"
@@ -152,6 +158,11 @@ models:
     open_source: true
     enabled: true
 
+  # Disabled 2026-08-20: in a real game (with max_tokens already raised to 1400),
+  # every single completion this model returned was completely empty -- 0 characters,
+  # HTTP 200, no error -- across two separate turns and all retries each time. Same
+  # failure class as gemini-2.5-pro-or above (reasoning tokens likely consuming the
+  # whole budget), just total starvation instead of partial. See games/<id>.raw.jsonl.
   - key: glm-4.6-or
     display_name: "GLM-4.6 (OpenRouter)"
     provider: openai_compat
@@ -160,7 +171,7 @@ models:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     open_source: true
-    enabled: true
+    enabled: false
 
   # Always available, no API key needed. Used only for --mock-only test runs --
   # kept disabled here so it never gets sampled into a real tournament game.

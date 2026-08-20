@@ -19,7 +19,8 @@ class GameResult:
     days: int
 
 
-MAX_MESSAGES_PER_TURN = 3
+MAX_MESSAGES_PER_TURN = 3  # burst cap for night mafia chat and showdown defense turns
+MAX_MESSAGES_PER_DAY = 3  # per-player daily budget for the open-floor day discussion
 
 
 def _extract_messages(reply: dict) -> list[str]:
@@ -132,6 +133,7 @@ class GameEngine:
         kill_target = _majority_choice(proposals)
 
         doctor_save: str | None = None
+        doctor_player = None
         for p in state.alive_by_role(Role.DOCTOR):
             candidates = [s.seat for s in state.alive_players()]
             reply = self.agents[p.seat].ask(
@@ -145,6 +147,7 @@ class GameEngine:
             )
             state.log_thought("night", p.seat, str(reply.get("thought", "")))
             doctor_save = reply.get("save")
+            doctor_player = p
 
         for p in state.alive_by_role(Role.DETECTIVE):
             candidates = [s.seat for s in state.alive_players() if s.seat != p.seat]
@@ -163,9 +166,22 @@ class GameEngine:
             target_seat = reply.get("investigate")
             if target_seat:
                 role = state.get(target_seat).role.value
-                p.private_notes.append(f"Night {state.day}: investigated {target_seat} -> role is {role}")
+                p.private_notes.append(
+                    f"Night {state.day}: you investigated {target_seat} -- they are {role}. You now know this."
+                )
 
-        if kill_target and kill_target != doctor_save and state.get(kill_target).alive:
+        attack_blocked = bool(kill_target and doctor_save and kill_target == doctor_save)
+        if doctor_player and doctor_save:
+            if attack_blocked:
+                doctor_player.private_notes.append(
+                    f"Night {state.day}: you protected {doctor_save} -- {doctor_save} was attacked and you saved them!"
+                )
+            else:
+                doctor_player.private_notes.append(
+                    f"Night {state.day}: you protected {doctor_save}. No attack landed on them that night."
+                )
+
+        if kill_target and not attack_blocked and state.get(kill_target).alive:
             state.kill(kill_target, "killed")
             if self.rules.get("reveal_role_on_death"):
                 role = state.get(kill_target).role.value
@@ -179,24 +195,7 @@ class GameEngine:
 
     def _run_day(self) -> None:
         state = self.state
-        rounds = self.rules.get("discussion_rounds_per_day", 1)
-
-        for _ in range(rounds):
-            order = state.alive_players()
-            random.shuffle(order)
-            for p in order:
-                reply = self.agents[p.seat].ask(
-                    state,
-                    prompts.build_system_prompt(state, p),
-                    prompts.build_day_discussion_prompt(state),
-                    required_keys=["messages"],
-                    seat=p.seat,
-                    purpose="day_discussion",
-                )
-                state.log_thought("day", p.seat, str(reply.get("thought", "")))
-                for msg in _extract_messages(reply):
-                    state.log_public("day", "speech", msg, speaker=p.seat)
-
+        self._run_discussion()
         voted_out = self._run_vote_with_showdowns()
         if voted_out:
             state.kill(voted_out, "voted_out")
@@ -207,6 +206,100 @@ class GameEngine:
                 state.log_public("day", "system", f"{voted_out} died.")
         else:
             state.log_public("day", "system", "The vote was tied; no one died.")
+
+    def _run_discussion(self) -> None:
+        """Runs day discussion as an open floor rather than a fixed speaking order:
+        one random player is picked to open, then each subsequent turn taps exactly
+        one alive player (fairly cycled, not re-asking everyone every turn) to decide
+        whether to speak (exactly one message), think privately, or pass. A real
+        conversation doesn't poll every participant before concluding the room's gone
+        quiet, so discussion ends as soon as discussion_silence_threshold consecutive
+        taps in a row produce no speaker -- not only once literally everyone has
+        individually declined. This is also the main cost lever: the expensive case
+        was always the tail end of a day, burning one call per remaining player just
+        to confirm nobody had anything left to add. max_discussion_polls_per_day is a
+        hard safety backstop, not expected to bind in normal play.
+        """
+        state = self.state
+        alive = state.alive_players()
+        if not alive:
+            return
+        budget = {p.seat: MAX_MESSAGES_PER_DAY for p in alive}
+
+        opener = random.choice(alive)
+        self._speak_opening(opener, budget)
+
+        max_polls = self.rules.get("max_discussion_polls_per_day", 1000)
+        quiet_limit = self.rules.get("discussion_silence_threshold", 4)
+        polls_used = 0
+        consecutive_quiet = 0
+        queue: list = []
+
+        while polls_used < max_polls:
+            candidates = [p for p in state.alive_players() if budget[p.seat] > 0]
+            if not candidates:
+                break
+            # Refill the turn-taking queue (a fair, reshuffled cycle through everyone
+            # still eligible) whenever it's empty or references someone who's since
+            # used up their daily budget.
+            queue = [p for p in queue if budget[p.seat] > 0]
+            if not queue:
+                queue = candidates[:]
+                random.shuffle(queue)
+
+            p = queue.pop(0)
+            polls_used += 1
+            if self._poll_speak(p, budget):
+                consecutive_quiet = 0
+            else:
+                consecutive_quiet += 1
+                if consecutive_quiet >= quiet_limit:
+                    break
+
+    def _speak_opening(self, p, budget: dict[str, int]) -> None:
+        state = self.state
+        reply = self.agents[p.seat].ask(
+            state,
+            prompts.build_system_prompt(state, p),
+            prompts.build_day_discussion_open_prompt(state),
+            required_keys=["message"],
+            seat=p.seat,
+            purpose="day_discussion_open",
+        )
+        state.log_thought("day", p.seat, str(reply.get("thought", "")))
+        msg = str(reply.get("message", "")).strip() or "(no response)"
+        state.log_public("day", "speech", msg, speaker=p.seat)
+        budget[p.seat] -= 1
+
+    def _poll_speak(self, p, budget: dict[str, int]) -> bool:
+        """Asks one player whether they want to speak right now. Returns True (and
+        posts their message) if they chose to speak, False if they chose to think or
+        stay silent -- in which case nothing public happens this turn.
+        """
+        state = self.state
+        reply = self.agents[p.seat].ask(
+            state,
+            prompts.build_system_prompt(state, p),
+            prompts.build_day_discussion_poll_prompt(state, budget[p.seat], MAX_MESSAGES_PER_DAY),
+            required_keys=["action"],
+            seat=p.seat,
+            purpose="day_discussion_poll",
+        )
+        thought = str(reply.get("thought", ""))
+        if thought:
+            state.log_thought("day", p.seat, thought)
+
+        action = str(reply.get("action", "pass")).strip().lower()
+        if action != "speak":
+            return False
+
+        msg = str(reply.get("message", "")).strip()
+        if not msg:
+            return False  # chose to speak but produced nothing -- treat as a pass, don't burn budget
+
+        state.log_public("day", "speech", msg, speaker=p.seat)
+        budget[p.seat] -= 1
+        return True
 
     def _run_vote_with_showdowns(self) -> str | None:
         """Runs the day's ballot. Votes are secret -- see state.log_vote -- so no

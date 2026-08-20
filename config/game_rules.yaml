@@ -13,8 +13,21 @@ role_setups:
 
 # Game-flow settings
 reveal_role_on_death: false   # if true, everyone learns the role of anyone who died
-discussion_rounds_per_day: 1  # how many speaking turns each alive player gets before voting
 max_days: 12                  # safety cap; game is declared a draw if exceeded (also bounds worst-case token spend)
+
+# Day discussion is an open floor, not a fixed speaking order: one random player
+# opens, then each turn taps exactly one alive player with messages left (fairly
+# cycled, not everyone every turn) to decide whether to speak (exactly one message),
+# think privately, or pass. Each player gets at most 3 messages per day (hardcoded --
+# mafia_sim/game/engine.py:MAX_MESSAGES_PER_DAY). A real conversation doesn't poll
+# every participant before concluding the room's gone quiet, so discussion ends after
+# discussion_silence_threshold consecutive declines in a row -- not only once
+# literally everyone has individually passed. This is also the main cost lever: the
+# expensive case is always the tail end of a day where nobody has anything left to
+# add, and this stops that from costing one call per remaining player.
+# max_discussion_polls_per_day is only a hard safety backstop, not expected to bind.
+discussion_silence_threshold: 4
+max_discussion_polls_per_day: 1000
 
 # Voting is a secret ballot -- players never learn who voted for whom, only the
 # eventual outcome (see mafia_sim/game/state.py:log_vote). A tie at the top goes to
@@ -43,6 +56,13 @@ summarizer_model: null
 
 # LLM call settings
 temperature: 0.9
-max_tokens: 500                 # needs headroom for a real multi-sentence private "thought", not just the short public reply
+# Needs headroom for a real multi-sentence private "thought" plus the JSON structure
+# around it -- and, for extended-thinking models (o-series, Gemini, some Grok/Claude
+# modes), *invisible* reasoning tokens count against this budget too on OpenRouter's
+# unified endpoint. At 500 this starved reasoning models down to ~50-character replies
+# that never closed their JSON (confirmed via games/<id>.raw.jsonl response lengths),
+# forcing a fallback to random moves every turn and making them look far less capable
+# than they are. 1400 leaves real room for both.
+max_tokens: 1400
 max_format_retries: 2           # re-prompt attempts if a model's JSON can't be parsed
 request_timeout_seconds: 60

@@ -64,9 +64,13 @@ class PlayerAgent:
                 error=resp.error,
                 cost_usd=resp.cost_usd,
             )
+            # Track cost even on a failed/empty attempt: the provider still billed for
+            # it (e.g. "empty_completion" -- reasoning tokens consumed, zero visible
+            # content -- is still a real, paid call), so skipping this would silently
+            # undercount spend.
+            self._track_cost(state, resp)
             if resp.error:
                 continue
-            self._track_cost(state, resp)
 
             obj = parse_json_object(resp.text)
             if obj is None:

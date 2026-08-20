@@ -45,5 +45,7 @@ class MockProvider(ChatProvider):
                 payload[key] = random.choice(names)
         if '"summary"' in combined:
             payload["summary"] = "Mock digest: no strong consensus emerged."
+        if '"action"' in combined:
+            payload["action"] = random.choice(["speak", "think", "pass"])
 
         return ProviderResponse(text=json.dumps(payload))

@@ -48,3 +48,23 @@ def test_complete_decodes_utf8_body_correctly(monkeypatch):
     assert resp.error is None
     assert EM_DASH_TEXT in resp.text
     assert REPLACEMENT_CHAR not in resp.text  # no replacement-character corruption
+
+
+def test_complete_flags_a_completely_empty_message_as_an_error(monkeypatch):
+    # Observed in production with GLM-4.6 via OpenRouter: HTTP 200, well-formed
+    # response shape, but message.content is "" -- most likely its entire max_tokens
+    # budget was consumed by invisible reasoning tokens. This should surface as an
+    # error rather than a silent "successful" empty response.
+    payload = {"choices": [{"message": {"content": ""}}], "usage": {"prompt_tokens": 500, "completion_tokens": 500}}
+    body_bytes = json.dumps(payload).encode("utf-8")
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        return _FakeResponse(200, body_bytes)
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    provider = OpenAICompatProvider("some-model", "fake-key", "https://example.com/v1")
+    resp = provider.complete("system", "user")
+
+    assert resp.error == "empty_completion"
+    assert resp.text == ""

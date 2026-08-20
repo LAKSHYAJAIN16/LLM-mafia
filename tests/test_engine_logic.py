@@ -12,7 +12,6 @@ RULES = {
     "max_format_retries": 1,
     "request_timeout_seconds": 30,
     "max_days": 20,
-    "discussion_rounds_per_day": 1,
     "reveal_role_on_death": False,
     "tie_vote_policy": "random",
 }
@@ -129,6 +128,142 @@ def test_showdown_falls_back_to_no_elimination_after_max_rounds():
 
     assert voted_out is None
     assert len(state.day_votes) == 3
+
+
+class _FixedNightAgent:
+    """Test double: always proposes/saves/investigates a fixed seat, regardless of
+    prompt content -- used to drive _run_night deterministically.
+    """
+
+    def __init__(self, value: str):
+        self.value = value
+
+    def ask(self, state, system_prompt, user_prompt, required_keys, target_keys=None, seat=None, purpose=""):
+        reply = {"thought": "", "messages": ["ok"]}
+        for key in ("target", "save", "investigate"):
+            if key in required_keys:
+                reply[key] = self.value
+        return reply
+
+
+def test_doctor_gets_private_feedback_when_a_save_blocks_an_attack():
+    players = [
+        Player(seat="Player1", model_key="m", role=Role.MAFIA),
+        Player(seat="Player2", model_key="m", role=Role.DOCTOR),
+        Player(seat="Player3", model_key="m", role=Role.VILLAGER),
+    ]
+    state = GameState(players=players)
+    state.day = 1
+    agents = {
+        "Player1": _FixedNightAgent("Player3"),  # mafia targets Player3
+        "Player2": _FixedNightAgent("Player3"),  # doctor protects Player3 -- blocks it
+    }
+    rules = {"max_format_retries": 1, "reveal_role_on_death": False}
+    engine = GameEngine(state, agents, rules)
+
+    engine._run_night()
+
+    assert state.get("Player3").alive is True
+    doctor = state.get("Player2")
+    assert any("saved them" in n for n in doctor.private_notes)
+    assert any("No one died" in e.text for e in state.public_log)
+
+
+def test_doctor_gets_private_feedback_when_the_save_was_not_needed():
+    players = [
+        Player(seat="Player1", model_key="m", role=Role.MAFIA),
+        Player(seat="Player2", model_key="m", role=Role.DOCTOR),
+        Player(seat="Player3", model_key="m", role=Role.VILLAGER),
+    ]
+    state = GameState(players=players)
+    state.day = 1
+    agents = {
+        "Player1": _FixedNightAgent("Player3"),  # mafia targets Player3
+        "Player2": _FixedNightAgent("Player2"),  # doctor protects themselves instead
+    }
+    rules = {"max_format_retries": 1, "reveal_role_on_death": False}
+    engine = GameEngine(state, agents, rules)
+
+    engine._run_night()
+
+    assert state.get("Player3").alive is False
+    doctor = state.get("Player2")
+    assert any("No attack landed" in n for n in doctor.private_notes)
+
+
+class ScriptedDiscussionAgent:
+    """Test double for day discussion: always speaks (with a fixed message) when
+    chosen as the forced opener, and returns a fixed action/message on every poll
+    otherwise -- used to drive _run_discussion deterministically.
+    """
+
+    def __init__(self, action: str = "pass", message: str = "hi"):
+        self.action = action
+        self.message = message
+
+    def ask(self, state, system_prompt, user_prompt, required_keys, target_keys=None, seat=None, purpose=""):
+        if purpose == "day_discussion_open":
+            return {"thought": "", "message": self.message}
+        return {"thought": "", "action": self.action, "message": self.message}
+
+
+def test_discussion_opener_is_forced_to_speak_even_if_configured_to_pass():
+    state = GameState(players=_villagers(1))
+    agents = {"Player1": ScriptedDiscussionAgent(action="pass", message="opening line")}
+    rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100}
+    engine = GameEngine(state, agents, rules)
+
+    engine._run_discussion()
+
+    speeches = [e for e in state.public_log if e.kind == "speech"]
+    assert len(speeches) == 1
+    assert speeches[0].text == "opening line"
+
+
+def test_discussion_ends_as_soon_as_everyone_passes():
+    state = GameState(players=_villagers(3))
+    agents = {p.seat: ScriptedDiscussionAgent(action="pass") for p in state.players}
+    rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100}
+    engine = GameEngine(state, agents, rules)
+
+    engine._run_discussion()
+
+    speeches = [e for e in state.public_log if e.kind == "speech"]
+    assert len(speeches) == 1  # only the forced opener; nobody else ever chose to speak
+
+
+def test_discussion_caps_a_talkative_player_at_three_messages_per_day():
+    state = GameState(players=_villagers(2))
+    agents = {
+        "Player1": ScriptedDiscussionAgent(action="speak", message="P1 talking"),
+        "Player2": ScriptedDiscussionAgent(action="pass"),
+    }
+    rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100}
+    engine = GameEngine(state, agents, rules)
+
+    engine._run_discussion()
+
+    p1_speeches = [e for e in state.public_log if e.speaker == "Player1"]
+    p2_speeches = [e for e in state.public_log if e.speaker == "Player2"]
+    assert len(p1_speeches) == 3  # hit the daily cap, never more
+    assert len(p2_speeches) <= 1  # only ever spoke if it happened to be the forced opener
+
+
+def test_discussion_treats_speak_with_no_message_as_a_pass():
+    state = GameState(players=_villagers(2))
+    agents = {
+        "Player1": ScriptedDiscussionAgent(action="pass"),
+        "Player2": ScriptedDiscussionAgent(action="speak", message=""),  # says speak but writes nothing
+    }
+    rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100}
+    engine = GameEngine(state, agents, rules)
+
+    engine._run_discussion()
+
+    # Only the forced opener ever posts: Player1 always passes, and Player2's
+    # "speak" with an empty message never burns budget or posts anything on a poll.
+    speeches = [e for e in state.public_log if e.kind == "speech"]
+    assert len(speeches) == 1
 
 
 def test_summarizer_only_fires_once_a_day_ages_out_of_the_window():
