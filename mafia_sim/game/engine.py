@@ -20,7 +20,7 @@ class GameResult:
     days: int
 
 
-MAX_MESSAGES_PER_TURN = 3  # burst cap for night mafia chat
+MAX_MESSAGES_PER_TURN = 4  # burst cap for night mafia chat
 DEFAULT_MAX_MESSAGES_PER_DAY = 5  # per-player daily budget for the open-floor day discussion, unless rules overrides it
 
 

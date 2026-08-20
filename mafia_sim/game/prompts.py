@@ -201,10 +201,10 @@ def build_night_mafia_prompt(state: GameState, player: Player) -> str:
         f"{_alive_line(state, exclude=[])}\n"
         "It is the night phase. Discuss privately with your mafia teammate(s) and "
         "propose who to eliminate tonight. You may not target a fellow mafia member. "
-        "You may send 1 to 3 separate short messages to your teammates this turn.\n"
+        "You may send 1 to 4 separate short messages to your teammates this turn.\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "messages": '
-        '["<message to your mafia teammates>", "<optional 2nd message>", "<optional 3rd message>"], '
-        '"target": "<exact player name to propose killing>"}}'
+        '["<message to your mafia teammates>", "<optional 2nd message>", "<optional 3rd message>", '
+        '"<optional 4th message>"], "target": "<exact player name to propose killing>"}}'
     )
 
 

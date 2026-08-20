@@ -86,7 +86,7 @@ every game (and totaled at the end of a run) whenever the provider reports
 it -- OpenRouter does, via `usage.cost`; the `leaderboard` command also
 breaks down total/avg/per-win cost per model. `config/game_rules.yaml` has
 several things tuned to bound spend:
-- `max_cost_usd: 2.00` -- a hard per-game spending cap, checked between
+- `max_cost_usd: 3.00` -- a hard per-game spending cap, checked between
   phases and inside the discussion/showdown loops, so one runaway game can't
   blow past it; the game just ends early as a draw if hit.
 - `max_days: 12` caps the worst case in turns.
@@ -95,14 +95,14 @@ several things tuned to bound spend:
   every time -- the main lever against the open-floor discussion getting
   expensive on quiet days -- with one floor: nobody alive goes a whole day
   without at least one turn, even if the room "goes quiet" by this rule first.
-- `transcript_full_detail_days: 3` -- older day-by-day discussion text is
+- `transcript_full_detail_days: 5` -- older day-by-day discussion text is
   dropped from the prompt (deaths stay for the whole game since they're short
   and strategically important), so prompt size doesn't grow quadratically
   over a long game. Optionally set `summarizer_model` to a roster key to
   compress each day into one sentence instead of dropping it outright once it
   ages out of that window (costs one small extra call/day).
 
-`max_tokens: 1400` gives room for a real private `thought` plus the JSON
+`max_tokens: 2000` gives room for a real private `thought` plus the JSON
 structure around it -- extended-thinking models can consume much of this on
 invisible reasoning tokens before writing anything visible, which is also why
 this shouldn't be set too low (some models will otherwise never manage to

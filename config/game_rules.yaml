@@ -20,8 +20,10 @@ max_days: 12                  # safety cap; game is declared a draw if exceeded 
 # day-discussion polling loop, and before each showdown revote, so a single expensive
 # day can self-truncate instead of only being caught at the next day boundary -- the
 # game then ends early as a draw with a system message recording why, same as hitting
-# max_days. Set to null to disable (no cap).
-max_cost_usd: 2.00
+# max_days. Raised 2.00 -> 3.00 alongside the context/message-limit increases below --
+# no point widening those if the game just gets cut off by the cost cap before they
+# matter. Set to null to disable (no cap).
+max_cost_usd: 3.00
 
 # Day discussion is an open floor, not a fixed speaking order: one random player
 # opens, then each turn taps one alive player with messages left to decide whether
@@ -38,8 +40,9 @@ max_cost_usd: 2.00
 # to 5/6 originally -- the tighter defaults made discussions feel too shallow. Briefly
 # dropped to 4 for one run; reverted back to 5 after real games showed the same
 # shallowing effect at 4 -- one model explicitly said "I have 2 messages left, so I
-# need to be efficient" mid-defense instead of finishing its actual reasoning. The $2
-# max_cost_usd cap is the real backstop against this getting expensive on a long game.
+# need to be efficient" mid-defense instead of finishing its actual reasoning.
+# Deliberately kept at 5, not raised further, per explicit request. The max_cost_usd
+# cap is the real backstop against this getting expensive on a long game.
 # max_discussion_polls_per_day is only a hard safety backstop, not expected to bind.
 max_messages_per_day: 5
 
@@ -67,8 +70,11 @@ tie_vote_policy: random       # 'random' or 'no_elimination' -- fallback once ma
 # dropped from the prompt (system events -- deaths -- and votes stay for the
 # whole game either way, since they're short and strategically load-bearing).
 # Without this, every turn resends the entire game transcript, so prompt
-# size -- and cost -- grows roughly quadratically with game length.
-transcript_full_detail_days: 3
+# size -- and cost -- grows roughly quadratically with game length. Raised
+# 3 -> 5 for a wider working context window; the day-summarizer below still
+# catches anything that ages out past that, so nothing is lost outright, just
+# compressed later than before.
+transcript_full_detail_days: 5
 
 # A roster key (from whichever --models file is in use) to use as a dedicated
 # day-summarizer -- automatically excluded from player sampling (see
@@ -91,11 +97,11 @@ temperature: 0.9
 # unified endpoint. At 500 this starved reasoning models down to ~50-character replies
 # that never closed their JSON (confirmed via games/<id>.raw.jsonl response lengths),
 # forcing a fallback to random moves every turn and making them look far less capable
-# than they are. 1400 leaves real room for both.
-max_tokens: 1400
+# than they are. Raised 1400 -> 2000 for more real reasoning headroom.
+max_tokens: 2000
 # A showdown speech is deliberately longer-form than a normal chat message -- a real
 # paragraph making a closing case, not a one-liner -- so it gets extra headroom on top
 # of the base max_tokens above. Falls back to max_tokens if unset.
-showdown_max_tokens: 2200
+showdown_max_tokens: 3000
 max_format_retries: 2           # re-prompt attempts if a model's JSON can't be parsed
 request_timeout_seconds: 60
