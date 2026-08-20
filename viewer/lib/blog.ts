@@ -18,6 +18,28 @@ export type BlogPost = {
 
 export const POSTS: BlogPost[] = [
   {
+    slug: "removed-cost-share-cap",
+    date: "2026-08-20",
+    title: "Removed the per-model cost-share cap",
+    summary: "max_cost_share_per_model kept ending games early whenever a model happened to get seated twice -- not the failure mode it was meant to catch.",
+    commits: [{ hash: "8b2d211", message: "Remove the max_cost_share_per_model guardrail" }],
+    body: [
+      "max_cost_share_per_model (added earlier today, see \"Retrying OpenRouter's routing hiccups...\" below) was meant to catch one model being disproportionately expensive per token. In practice, with only ~10-11 distinct playable models in the OpenRouter roster and games running 10-12 players, the sampler often has to seat the same model twice -- which alone roughly doubles that model's share of spend and can trip the cap well before it's actually behaving badly. A real 10-player game ended after just one day because a model seated in two seats hit 65% against a 50% cap.",
+      "Removed outright: the max_cost_share_per_model rule, the _budget_exceeded_reason() branch that checked it, and the MIN_COST_FOR_SHARE_CHECK constant. The flat max_cost_usd hard cap remains as the only spend backstop.",
+    ],
+  },
+  {
+    slug: "prompts-and-blog-pages",
+    date: "2026-08-20",
+    title: "Added /prompts and /blog to the viewer",
+    summary: "A page documenting every literal prompt template the simulation sends, and this changelog.",
+    commits: [{ hash: "93ae767", message: "Add /prompts and /blog pages to the viewer; revert vote-oriented discussion framing" }],
+    body: [
+      "/prompts is a hand-mirrored reference of every prompt template in mafia_sim/game/prompts.py and summarizer.py -- the same manual-sync convention the viewer already uses for game JSON (lib/types.ts, lib/transcript.ts), just applied to prompts instead of game state. /blog is this page.",
+      "The same commit also reverted the \"vote-oriented discussion\" framing from earlier today (see \"Telling models the vote was secret the whole time\" below) after it didn't feel right once actually running -- kept the unrelated secret-ballot-awareness half of that change.",
+    ],
+  },
+  {
     slug: "config-driven-daily-message-cap",
     date: "2026-08-20",
     title: "The daily message cap is a config value now, not a constant",
@@ -99,7 +121,7 @@ export const POSTS: BlogPost[] = [
     body: [
       "A requested review of a real game's raw call logs surfaced four possible issues. Three got fixed (the fourth -- nudging the detective to claim publicly -- was deliberately skipped, since the ask was for gameplay to evolve naturally rather than being pushed toward a specific strategy).",
       "OpenRouter occasionally returns an HTTP 400 (\"does not support endpoint: completions\") from its multi-backend routing -- confirmed transient, since retrying the identical request succeeds -- so it's now retried the same way a 5xx would be, scoped to OpenRouter only.",
-      "Discussion fairness: the open floor could let a day go quiet before every player had even one turn. Fixed by tracking who's been polled and forcing an unseen player to speak before silence is allowed to end the day. And a new max_cost_share_per_model guardrail (0.5) ends a game early, the same way the hard cost cap does, if any single model's spend dominates -- distinct from the flat cap, since one game had a single (well-formed, no-retry) model alone account for ~30% of total spend just by being expensive per token.",
+      "Discussion fairness: the open floor could let a day go quiet before every player had even one turn. Fixed by tracking who's been polled and forcing an unseen player to speak before silence is allowed to end the day. This commit also added a max_cost_share_per_model guardrail (0.5) ending a game early if any single model's spend dominated -- it was removed again shortly after (see below), once a real 10-player game showed it triggering too eagerly whenever a model happened to get seated twice.",
     ],
   },
   {
