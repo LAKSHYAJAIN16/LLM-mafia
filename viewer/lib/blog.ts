@@ -18,6 +18,23 @@ export type BlogPost = {
 
 export const POSTS: BlogPost[] = [
   {
+    slug: "encoding-fix-and-suspicion-tracking",
+    date: "2026-08-20",
+    title: "A real crash fix, structured suspicion tracking, and prompt caching",
+    summary: "Chinese-vendor models could crash the whole process on Windows. Also: a persistent per-player belief tracker, and Anthropic prompt caching.",
+    commits: [
+      { hash: "353f6d4", message: "Fix a crash on characters Windows' console codepage can't encode" },
+      { hash: "a8dec6e", message: "Add structured suspicion tracking, a persistent per-player belief tracker" },
+      { hash: "6134dfb", message: "Tighten RULES_BLOCK's memory-field explanation, cut ~50% of its tokens" },
+      { hash: "8491e12", message: "Cache RULES_BLOCK as a prefix for Anthropic models via OpenRouter" },
+    ],
+    body: [
+      "A real game crash, root-caused: adding Chinese-vendor models (Tencent Hunyuan, Baidu ERNIE) meant a \"thought\" or public message could contain native-script text. print() on Windows defaults to the system codepage (cp1252), which can't represent arbitrary Unicode -- instead of garbling one line like past mojibake did, it took the whole process down with UnicodeEncodeError mid-game. main() now reconfigures stdout/stderr to UTF-8 with errors=\"replace\" before doing anything else.",
+      "Added structured suspicion tracking: a per-player belief tracker (seat -> one-line read) that persists and updates in place, instead of a read living only in free-form \"thought\" text that's gone the next turn. Offered on the three main reasoning touchpoints (day open, day poll, day vote), rendered back via build_system_prompt, filtered to currently-alive seats.",
+      "Read through several papers on LLM token/context minimization after a concern that recent additions were bloating every prompt. Most techniques (LLMLingua-style compression, KV-cache eviction) don't apply -- we call other people's APIs, no access to their inference internals. Two things did apply and got shipped: trimmed RULES_BLOCK's memory-field explanation by about half, and implemented Anthropic prompt caching -- RULES_BLOCK is byte-identical on every call all game, a textbook caching candidate, but Anthropic (unlike most vendors) needs an explicit cache_control breakpoint rather than auto-caching. Unverified against a live model since the OpenRouter balance is at $0 -- covered by unit tests on the request shape only, needs a real check once funds are added.",
+    ],
+  },
+  {
     slug: "roster-expansion-and-test-cleanup",
     date: "2026-08-20",
     title: "7 new vendors in, 3 worst performers out, and a leaner test suite",
