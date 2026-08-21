@@ -112,6 +112,10 @@ models:
     open_source: false
     enabled: true
 
+  # Disabled 2026-08-20: worst Elo in the roster (1453, tied with command-a-or) over
+  # 10 real games -- 10% win rate, and got caught as mafia 50% of the time it was
+  # mafia. Not a bug, just consistently the weakest real-game performer once enough
+  # games accumulated to trust the leaderboard (`mafia_sim leaderboard`).
   - key: deepseek-chat-or
     display_name: "DeepSeek Chat (OpenRouter)"
     provider: openai_compat
@@ -120,7 +124,7 @@ models:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     open_source: true
-    enabled: true
+    enabled: false
 
   # Disabled 2026-08-20: repeatedly observed sending near-duplicate messages
   # (verbatim at first, then reworded-but-structurally-identical even after the
@@ -137,6 +141,11 @@ models:
     open_source: true
     enabled: false
 
+  # Disabled 2026-08-20: 1477 Elo, 12% win rate over 8 real games, caught as mafia
+  # 50% of the time and friendly-fired (voted out its own town teammate) 25% of the
+  # time -- among the weakest real-game performers on the leaderboard. Also, in the
+  # one detective role it drew, it re-cited already-dead players as live suspects
+  # three separate times in a row instead of using its actual investigation results.
   - key: qwen-2.5-72b-or
     display_name: "Qwen 2.5 72B Instruct (OpenRouter)"
     provider: openai_compat
@@ -145,8 +154,12 @@ models:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     open_source: true
-    enabled: true
+    enabled: false
 
+  # Disabled 2026-08-20: worst Elo in the roster (1453, tied with deepseek-chat-or)
+  # over 9 real games -- 11% win rate, caught as mafia 100% of the times it was
+  # mafia, friendly-fired 50% of the time, and the most expensive-per-game model at
+  # $0.0884/game despite the weak results.
   - key: command-a-or
     display_name: "Cohere Command A (OpenRouter)"
     provider: openai_compat
@@ -155,7 +168,7 @@ models:
     base_url: https://openrouter.ai/api/v1
     api_key_env: OPENROUTER_API_KEY
     open_source: false
-    enabled: true
+    enabled: false
 
   - key: kimi-k2-or
     display_name: "Kimi K2 (OpenRouter)"
@@ -181,6 +194,84 @@ models:
     api_key_env: OPENROUTER_API_KEY
     open_source: true
     enabled: false
+
+  # Added 2026-08-20 to widen vendor diversity -- a 12-player game was exceeding the
+  # roster's distinct-vendor count and having to double-seat a model, which caused a
+  # real observed problem (two Mistral Large seats converging on near-identical
+  # phrasing, read by other players as suspicious "coordination"). All 8 candidates
+  # below were live-verified with a real completion call against OpenRouter on
+  # 2026-08-20 before being added; perplexity/sonar-pro was tried and dropped (HTTP
+  # 400 on every call -- also a search-augmented model, a poor fit for a closed-info
+  # game anyway).
+  - key: nova-pro-or
+    display_name: "Amazon Nova Pro (OpenRouter)"
+    provider: openai_compat
+    vendor: amazon
+    model_id: amazon/nova-pro-v1
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    open_source: false
+    enabled: true
+
+  - key: nemotron-super-or
+    display_name: "NVIDIA Nemotron 3 Super 120B (OpenRouter)"
+    provider: openai_compat
+    vendor: nvidia
+    model_id: nvidia/nemotron-3-super-120b-a12b
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    open_source: true
+    enabled: true
+
+  - key: minimax-m2-or
+    display_name: "MiniMax M2 (OpenRouter)"
+    provider: openai_compat
+    vendor: minimax
+    model_id: minimax/minimax-m2
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    open_source: true
+    enabled: true
+
+  - key: phi-4-or
+    display_name: "Microsoft Phi-4 (OpenRouter)"
+    provider: openai_compat
+    vendor: microsoft
+    model_id: microsoft/phi-4
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    open_source: true
+    enabled: true
+
+  - key: granite-4-or
+    display_name: "IBM Granite 4.1 8B (OpenRouter)"
+    provider: openai_compat
+    vendor: ibm
+    model_id: ibm-granite/granite-4.1-8b
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    open_source: true
+    enabled: true
+
+  - key: hunyuan-or
+    display_name: "Tencent Hunyuan A13B (OpenRouter)"
+    provider: openai_compat
+    vendor: tencent
+    model_id: tencent/hunyuan-a13b-instruct
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    open_source: true
+    enabled: true
+
+  - key: ernie-4.5-or
+    display_name: "Baidu ERNIE 4.5 VL (OpenRouter)"
+    provider: openai_compat
+    vendor: baidu
+    model_id: baidu/ernie-4.5-vl-424b-a47b
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    open_source: false
+    enabled: true
 
   # Always available, no API key needed. Used only for --mock-only test runs --
   # kept disabled here so it never gets sampled into a real tournament game.
