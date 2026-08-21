@@ -2,6 +2,7 @@ import json
 
 import requests
 
+from mafia_sim.game.prompts import RULES_BLOCK
 from mafia_sim.providers.openai_compat_provider import OpenAICompatProvider
 
 # Built from chr() codepoints (not literal characters or \u escape source text)
@@ -112,6 +113,49 @@ def test_complete_retries_past_an_openrouter_provider_routing_hiccup(monkeypatch
     assert len(calls) == 2  # retried once past the routing hiccup, then succeeded
     assert resp.error is None
     assert resp.text == "ok"
+
+
+def test_complete_marks_rules_block_as_a_cached_prefix_for_anthropic_via_openrouter(monkeypatch):
+    # RULES_BLOCK is byte-identical on every call all game; Anthropic doesn't
+    # auto-cache like most vendors, so it needs an explicit cache_control
+    # breakpoint, passed through by OpenRouter when content is sent as blocks.
+    captured = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):  # noqa: A002
+        captured["body"] = json
+        payload = {"choices": [{"message": {"content": "ok"}}], "usage": {}}
+        import json as json_module
+
+        return _FakeResponse(200, json_module.dumps(payload).encode("utf-8"))
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    provider = OpenAICompatProvider("anthropic/claude-opus-5", "fake-key", "https://openrouter.ai/api/v1")
+    provider.complete(RULES_BLOCK + "You are Player1. Your secret role is: villager.", "user")
+
+    content = captured["body"]["messages"][0]["content"]
+    assert isinstance(content, list)
+    assert content[0] == {"type": "text", "text": RULES_BLOCK, "cache_control": {"type": "ephemeral"}}
+    assert content[1] == {"type": "text", "text": "You are Player1. Your secret role is: villager."}
+
+
+def test_complete_leaves_system_content_flat_for_non_anthropic_models(monkeypatch):
+    captured = {}
+
+    def fake_post(url, headers=None, json=None, timeout=None):  # noqa: A002
+        captured["body"] = json
+        payload = {"choices": [{"message": {"content": "ok"}}], "usage": {}}
+        import json as json_module
+
+        return _FakeResponse(200, json_module.dumps(payload).encode("utf-8"))
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    provider = OpenAICompatProvider("mistralai/mistral-large", "fake-key", "https://openrouter.ai/api/v1")
+    provider.complete(RULES_BLOCK + "You are Player1. Your secret role is: villager.", "user")
+
+    content = captured["body"]["messages"][0]["content"]
+    assert isinstance(content, str)  # unaffected -- other vendors either auto-cache or are unverified for blocks
 
 
 def test_complete_does_not_retry_a_routing_hiccup_message_off_openrouter(monkeypatch):

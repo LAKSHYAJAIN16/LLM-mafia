@@ -4,6 +4,7 @@ import json
 
 import requests
 
+from ..game.prompts import RULES_BLOCK
 from .base import ChatProvider, ProviderResponse
 from .retry import RETRYABLE_STATUS, with_backoff
 
@@ -17,6 +18,25 @@ class OpenAICompatProvider(ChatProvider):
         super().__init__(model_id, api_key)
         self.base_url = base_url.rstrip("/")
         self.is_openrouter = "openrouter.ai" in self.base_url
+
+    def _system_message_content(self, system_prompt: str) -> str | list[dict]:
+        """Anthropic models don't auto-cache like most other vendors do -- they need an
+        explicit cache_control breakpoint, and OpenRouter passes it through when the
+        system message is sent as content blocks instead of a flat string. RULES_BLOCK
+        is byte-identical on every single call all game (only what follows it -- role,
+        teammates, private notes, suspicion tracker -- actually changes), so it's marked
+        as the cached prefix; everything after it is sent as a second, uncached block.
+        Scoped to Anthropic-via-OpenRouter only -- other vendors either auto-cache
+        without needing this, or their support for array-format system content is
+        unverified, and a flat string is always safe there.
+        """
+        if self.is_openrouter and self.model_id.startswith("anthropic/") and system_prompt.startswith(RULES_BLOCK):
+            rest = system_prompt[len(RULES_BLOCK) :]
+            blocks = [{"type": "text", "text": RULES_BLOCK, "cache_control": {"type": "ephemeral"}}]
+            if rest:
+                blocks.append({"type": "text", "text": rest})
+            return blocks
+        return system_prompt
 
     def complete(
         self,
@@ -36,7 +56,7 @@ class OpenAICompatProvider(ChatProvider):
         body = {
             "model": self.model_id,
             "messages": [
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": self._system_message_content(system_prompt)},
                 {"role": "user", "content": user_prompt},
             ],
             "temperature": temperature,
