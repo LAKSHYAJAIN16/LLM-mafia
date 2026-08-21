@@ -4,6 +4,7 @@ import argparse
 import glob
 import json
 import os
+import sys
 
 import yaml
 from dotenv import load_dotenv
@@ -149,6 +150,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    # Some roster models (Chinese-vendor ones especially) can produce native-script
+    # text in a "thought" or public message. Windows' default console encoding
+    # (cp1252 here) can't represent arbitrary Unicode and crashes the whole process
+    # on print() instead of just garbling that one line -- force UTF-8 output, with
+    # a safe fallback so even a character UTF-8-capable terminals still can't render
+    # never takes the whole run down mid-game.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     parser = build_parser()
     args = parser.parse_args()
     args.func(args)
