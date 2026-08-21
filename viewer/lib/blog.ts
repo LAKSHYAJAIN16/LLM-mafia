@@ -18,6 +18,21 @@ export type BlogPost = {
 
 export const POSTS: BlogPost[] = [
   {
+    slug: "roster-expansion-and-test-cleanup",
+    date: "2026-08-20",
+    title: "7 new vendors in, 3 worst performers out, and a leaner test suite",
+    summary: "Real leaderboard data (not guesses) picked the models to drop. Roster went from 9 to 15 enabled vendors.",
+    commits: [
+      { hash: "45d29f0", message: "Consolidate redundant test pairs, no coverage lost" },
+      { hash: "a2c0461", message: "Add 7 new-vendor models, drop the 3 worst real performers" },
+    ],
+    body: [
+      "Pulled the real accumulated leaderboard (`mafia_sim leaderboard`, built from every game logged so far) instead of guessing at which models to cut. command-a-or and deepseek-chat-or were tied for the roster's worst Elo (1453) over 9-10 games each; qwen-2.5-72b-or wasn't far ahead (1477 Elo, 50% caught-as-mafia rate) and was also the detective that repeatedly cited dead players as live suspects in the most recently watched game. All three disabled.",
+      "To fill the gap -- and directly address the duplicate-seat problem from the 12-player game (two Mistral Large seats converging on near-identical phrasing) -- added 7 models from vendors not previously in the roster: Amazon Nova Pro, NVIDIA Nemotron 3 Super 120B, MiniMax M2, Microsoft Phi-4, IBM Granite 4.1 8B, Tencent Hunyuan A13B, and Baidu ERNIE 4.5 VL. Each was live-verified with a real completion call first, matching the project's existing convention -- perplexity/sonar-pro was tried and dropped (HTTP 400 on every call, and a poor fit anyway: it's search-augmented, which doesn't belong in a closed-information game). Enabled vendor count: 9 -> 15.",
+      "Separately, did a real pass over the test suite after a complaint that it was getting excessive: found three genuinely redundant test pairs (an edge case that duplicated its main test's setup, and two on/off-style pairs that could check both branches in one function) and merged them. 65 tests -> 62, identical coverage, less duplicated setup.",
+    ],
+  },
+  {
     slug: "detective-memory-fix",
     date: "2026-08-20",
     title: "Fixed a forgetful detective; tried and dropped a persona-trait idea",
