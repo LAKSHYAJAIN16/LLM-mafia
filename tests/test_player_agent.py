@@ -59,6 +59,64 @@ def test_ask_logs_every_retry_attempt_separately():
     assert state.format_failures["broken"] == 1
 
 
+def test_ask_carries_an_optional_remember_note_into_the_players_private_notes():
+    import json
+
+    from mafia_sim.providers.base import ProviderResponse
+
+    class RememberingProvider:
+        def complete(self, system_prompt, user_prompt, temperature=0.9, max_tokens=500, timeout=60):
+            return ProviderResponse(
+                text=json.dumps({"vote": "Player2", "remember": "Player2 contradicted themselves on Day 1."})
+            )
+
+    spec = ModelSpec(key="m", display_name="m", provider="mock", model_id="x", vendor="mock")
+    agent = PlayerAgent(spec, RememberingProvider(), RULES)
+    state = GameState(players=[Player(seat="Player1", model_key="m", role=Role.VILLAGER)])
+    state.day = 2
+
+    agent.ask(
+        state,
+        "system text",
+        "user text",
+        required_keys=["vote"],
+        target_keys={"vote": ["Player1", "Player2"]},
+        seat="Player1",
+        purpose="day_vote",
+    )
+
+    notes = state.get("Player1").private_notes
+    assert len(notes) == 1
+    assert "Player2 contradicted themselves on Day 1." in notes[0]
+    assert "Day 2" in notes[0]
+
+
+def test_ask_ignores_a_blank_or_missing_remember_field():
+    import json
+
+    from mafia_sim.providers.base import ProviderResponse
+
+    class NoOpinionProvider:
+        def complete(self, system_prompt, user_prompt, temperature=0.9, max_tokens=500, timeout=60):
+            return ProviderResponse(text=json.dumps({"vote": "Player2", "remember": "   "}))
+
+    spec = ModelSpec(key="m", display_name="m", provider="mock", model_id="x", vendor="mock")
+    agent = PlayerAgent(spec, NoOpinionProvider(), RULES)
+    state = GameState(players=[Player(seat="Player1", model_key="m", role=Role.VILLAGER)])
+
+    agent.ask(
+        state,
+        "system text",
+        "user text",
+        required_keys=["vote"],
+        target_keys={"vote": ["Player1", "Player2"]},
+        seat="Player1",
+        purpose="day_vote",
+    )
+
+    assert state.get("Player1").private_notes == []
+
+
 def test_ask_regenerates_on_third_person_self_reference_and_accepts_the_fix():
     import json
 

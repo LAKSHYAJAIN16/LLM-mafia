@@ -26,6 +26,21 @@ def test_discussion_poll_prompt_includes_rate_nudge_when_given():
     assert "make yourself heard" not in plain_text and "let them have their turn" not in plain_text
 
 
+def test_every_action_prompt_offers_the_optional_remember_field():
+    players = [Player(seat="Player1", model_key="m", role=Role.VILLAGER)]
+    state = GameState(players=players)
+    player = players[0]
+
+    assert '"remember"' in prompts.build_day_discussion_open_prompt(state)
+    assert '"remember"' in prompts.build_day_discussion_poll_prompt(state, 3, 5)
+    assert '"remember"' in prompts.build_day_vote_prompt(state, player)
+    assert '"remember"' in prompts.build_day_showdown_defense_prompt(state, player, ["Player1"])
+    assert '"remember"' in prompts.build_day_showdown_vote_prompt(state, player, ["Player1"])
+    assert '"remember"' in prompts.build_night_mafia_prompt(state, player)
+    assert '"remember"' in prompts.build_night_doctor_prompt(state, player)
+    assert '"remember"' in prompts.build_night_detective_prompt(state, player)
+
+
 def test_mafia_system_prompt_only_lists_alive_teammates_as_surviving():
     players = [
         Player(seat="Player1", model_key="m", role=Role.MAFIA),

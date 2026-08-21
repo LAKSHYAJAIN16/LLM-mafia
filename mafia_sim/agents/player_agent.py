@@ -49,6 +49,19 @@ class PlayerAgent:
         self.provider = provider
         self.rules = rules
 
+    def _maybe_remember(self, state: GameState, seat: str | None, resolved: dict) -> None:
+        """Every player -- not just doctor/detective, who get engine-authored outcome
+        notes -- can optionally carry a private note of their own into future turns via
+        the "remember" field, fed back through build_system_prompt's private_notes
+        rendering. Applied centrally here so every ask() call site gets it uniformly,
+        without needing to touch each one in engine.py.
+        """
+        if not seat:
+            return
+        note = resolved.get("remember")
+        if isinstance(note, str) and note.strip():
+            state.get(seat).private_notes.append(f"(Day {state.day}, your own note) {note.strip()}")
+
     def _track_cost(self, state: GameState, resp) -> None:
         cost = resp.cost_usd
         if not cost and (self.spec.price_per_1m_input or self.spec.price_per_1m_output):
@@ -132,6 +145,7 @@ class PlayerAgent:
                 )
                 continue
 
+            self._maybe_remember(state, seat, resolved)
             return resolved
 
         state.note_format_failure(self.spec.key)

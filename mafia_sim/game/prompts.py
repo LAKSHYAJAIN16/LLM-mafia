@@ -22,12 +22,20 @@ you vote for -- ever learns who voted for whom, only the eventual outcome
 (who got eliminated). Nobody can call you out by name for how you voted, so
 vote your genuine read, not whatever looks safest to be seen doing.
 
-"thought" is your private scratchpad -- nobody else ever sees it, not even
-your own future turns' prompt except as a brief note you choose to keep (see
-"private notes" below, which is separate). Use it to actually reason: track
-who has been inconsistent, who benefits from each death, what a lying player
+"thought" is your private scratchpad -- nobody else ever sees it, and by
+default it's gone once this turn ends: it does NOT automatically carry into
+your future turns' prompts. Use it to actually reason right now: track who
+has been inconsistent, who benefits from each death, what a lying player
 would say, and what your plan is. Do not hold back here -- a few sentences
 of real analysis is expected, not a one-liner.
+
+If there's something from your reasoning worth carrying forward -- a
+suspicion you want to track, a plan for tomorrow, a pattern you noticed --
+put it in the optional "remember" field wherever it's offered. Unlike
+"thought", anything you write there is fed back to you verbatim in your own
+future prompts (and only yours -- still never shown to anyone else). Use it
+sparingly for real through-lines, not a running transcript of everything you
+already said out loud.
 
 Only the "messages"/"target"/"vote"/"save"/"investigate" field(s) you're
 asked for are ever shown to anyone else, and you decide what (if anything)
@@ -89,7 +97,7 @@ def build_system_prompt(state: GameState, player: Player) -> str:
         )
 
     if player.private_notes:
-        lines.append("Your private notes from previous nights:")
+        lines.append("Your private notes carried over from earlier in the game:")
         lines.extend(f"- {n}" for n in player.private_notes)
 
     return "\n".join(lines)
@@ -108,7 +116,8 @@ def build_day_discussion_open_prompt(state: GameState) -> str:
         "It is the day discussion phase, and you've been randomly chosen to open it. "
         "Send one message to kick off the conversation.\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", '
-        '"message": "<one short public message>"}'
+        '"message": "<one short public message>", '
+        '"remember": "<optional: a short private note carried into your future turns, or omit>"}'
     )
 
 
@@ -153,7 +162,8 @@ def build_day_discussion_poll_prompt(
         "when you actually decide to speak, vote, or act at night.\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<brief one-line gut check>", '
         '"action": "speak" | "think" | "pass", '
-        '"message": "<exactly one short public message -- only if action is \'speak\', omit or leave empty otherwise>"}'
+        '"message": "<exactly one short public message -- only if action is \'speak\', omit or leave empty otherwise>", '
+        '"remember": "<optional: a short private note carried into your future turns, or omit>"}'
     )
 
 
@@ -164,7 +174,8 @@ def build_day_vote_prompt(state: GameState, player: Player) -> str:
         "It is the voting phase. Choose one other alive player to vote to eliminate. "
         "This ballot is secret -- nobody will ever see who you voted for, only the "
         "outcome -- so vote your real read, not whatever looks safest.\n"
-        f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "vote": "<exact player name>"}}'
+        f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "vote": "<exact player name>", '
+        '"remember": "<optional: a short private note carried into your future turns, or omit>"}}'
     )
 
 
@@ -180,7 +191,8 @@ def build_day_showdown_defense_prompt(state: GameState, player: Player, accused:
         "look at the other tied player instead. Unlike your usual short chat messages, "
         "this is a real speech -- write a full paragraph, not a one-liner.\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", '
-        '"speech": "<your full defense -- a real paragraph making your case>"}'
+        '"speech": "<your full defense -- a real paragraph making your case>", '
+        '"remember": "<optional: a short private note carried into your future turns, or omit>"}'
     )
 
 
@@ -190,7 +202,8 @@ def build_day_showdown_vote_prompt(state: GameState, player: Player, accused: li
         f"{state.public_transcript_text()}\n\n"
         f"{_alive_line(state, exclude=[player.seat])}\n"
         f"Showdown revote: choose which of the tied players to eliminate ({options}).\n"
-        f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "vote": "<exact player name>"}}'
+        f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "vote": "<exact player name>", '
+        '"remember": "<optional: a short private note carried into your future turns, or omit>"}}'
     )
 
 
@@ -204,7 +217,8 @@ def build_night_mafia_prompt(state: GameState, player: Player) -> str:
         "You may send 1 to 4 separate short messages to your teammates this turn.\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "messages": '
         '["<message to your mafia teammates>", "<optional 2nd message>", "<optional 3rd message>", '
-        '"<optional 4th message>"], "target": "<exact player name to propose killing>"}}'
+        '"<optional 4th message>"], "target": "<exact player name to propose killing>", '
+        '"remember": "<optional: a short private note carried into your future turns, or omit>"}}'
     )
 
 
@@ -214,7 +228,8 @@ def build_night_doctor_prompt(state: GameState, player: Player) -> str:
         f"{_alive_line(state)}\n"
         "It is the night phase. Choose one alive player to protect from tonight's "
         "mafia attack (you may protect yourself).\n"
-        f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "save": "<exact player name>"}}'
+        f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "save": "<exact player name>", '
+        '"remember": "<optional: a short private note carried into your future turns, or omit>"}}'
     )
 
 
@@ -224,5 +239,6 @@ def build_night_detective_prompt(state: GameState, player: Player) -> str:
         f"{_alive_line(state, exclude=[player.seat])}\n"
         "It is the night phase. Choose one alive player (not yourself) to secretly "
         "investigate; you will learn their exact role.\n"
-        f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "investigate": "<exact player name>"}}'
+        f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "investigate": "<exact player name>", '
+        '"remember": "<optional: a short private note carried into your future turns, or omit>"}}'
     )
