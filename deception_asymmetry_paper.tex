@@ -11,6 +11,9 @@
 \usepackage{textcomp}
 \usepackage{url}
 \usepackage{cite}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{enumitem}
 
 \definecolor{deepblue}{HTML}{1D4289}
 \definecolor{paleblue}{HTML}{DBE7FB}
@@ -36,25 +39,66 @@ large language models, social deduction games, multi-agent systems, deception de
 
 \section{Introduction}
 
-Social deduction games, including Mafia, Werewolf, and their variants, have become a recurring testbed for evaluating large language models' capacity for strategic communication, deception, and theory of mind, because winning requires players to reason about what other agents believe, to lie convincingly under partial information, and to detect when others are lying \cite{eckhaus2025time,feng2024survey,song2025beyond}. Nearly every published study we are aware of, however, instantiates every agent (or every agent but one human player) from a single backbone model, varying at most its size or fine-tuning regime \cite{eckhaus2025time,zhang2025dvm,mittal2026triadic}. This leaves an important question empirically untouched: when agents from genuinely different model families, with different pretraining corpora, alignment procedures, and RLHF objectives, play against each other, is deception skill symmetric, or does a given family have a systematic blind spot against a specific other family's persuasive style?
+Social deduction games, including Mafia, Werewolf, and their variants, have become a recurring testbed for evaluating large language models' capacity for strategic communication, deception, and theory of mind, because winning requires players to reason about what other agents believe, to lie convincingly under partial information, and to detect when others are lying \cite{eckhaus2025time,feng2024survey,song2025beyond}. The appeal of these games as a benchmark is structural, not incidental: a social deduction game supplies a built-in, unambiguous scoring signal (who wins), a natural information asymmetry between roles, and a requirement that every utterance be interpretable both at face value and as a possible lie, three properties that are difficult to obtain simultaneously in more open-ended agent evaluations.
 
-MafiaSim, the simulator underlying this work, already answers a version of this question structurally: its player-sampling procedure seats one model per company wherever the roster allows, so that a single game routinely pits Claude, GPT, Gemini, Grok, and open-weight models such as Kimi K2 or Mistral Large against one another under identical game rules. This heterogeneity, originally adopted for roster diversity rather than for this analysis, turns out to be exactly the substrate a deception-asymmetry study needs.
+Nearly every published study we are aware of, however, instantiates every agent, or every agent but one human player, from a single backbone model, varying at most its size or fine-tuning regime \cite{eckhaus2025time,zhang2025dvm,mittal2026triadic}. This is a reasonable default for isolating the effect of model scale or training procedure, but it leaves an important and, to our knowledge, empirically untouched question: when agents from genuinely different model families, with different pretraining corpora, alignment procedures, and RLHF objectives, play against each other under identical game rules, is deception skill symmetric, or does a given family have a systematic blind spot against a specific other family's persuasive style? The distinction matters practically as well as scientifically. As LLM-based agents are increasingly deployed to negotiate, moderate, or transact with agents from other vendors rather than only with humans or copies of themselves, a documented asymmetry, model A is disproportionately good at deceiving model B specifically, would be a genuinely new category of finding: not a capability gap, but a pairwise compatibility gap invisible to any single-model-family benchmark.
 
-This paper makes four contributions. First, we formalize a cross-vendor deception-asymmetry metric, an opportunity-normalized catch rate, computable entirely from data a Mafia simulator already logs for other purposes, requiring no new game mechanic and no additional model calls. Second, we implement it as an open, game-agnostic command-line tool (\texttt{mafia\_sim deception-matrix}) that recomputes the full matrix from logged game transcripts in well under a second. Third, we report preliminary results from nine real games spanning up to fifteen distinct model vendors, including a full pairwise catch-rate matrix and per-model aggregate detectability rankings. Fourth, we discuss the confounds, principally the entanglement of deception success with conversational engagement, that limit the causal strength of the current results and motivate concrete next steps.
+MafiaSim, the simulator underlying this work, already answers a version of this question structurally, and did so for reasons unrelated to deception research. Its player-sampling procedure seats one model per company wherever the roster allows, so that a single game routinely pits Claude, GPT, Gemini, Grok, and open-weight models such as Kimi K2 or Mistral Large against one another under identical game rules; this heterogeneity was originally adopted purely for roster diversity in a leaderboard context, and turns out, on inspection of the resulting logs, to be exactly the substrate a deception-asymmetry study needs. This paper is, in that sense, an analysis built on data the system was already producing for another purpose, rather than an experiment designed from scratch, which is also why we present it as a working technical report rather than a controlled study: the roster, role ratios, and even the set of vendors available changed over the period the underlying games were collected (Section~VII-C), a form of ecological validity that a purpose-built experiment would not have, at the cost of the tighter controls a purpose-built experiment would.
 
-\textit{Scope note:} This is a working technical report, not a peer-reviewed publication. Sample sizes are small ($n=9$ games); we treat the results as directional and say so explicitly wherever the data does not support a stronger claim.
+This paper makes four contributions:
+\begin{enumerate}[leftmargin=*]
+\item We formalize a cross-vendor deception-asymmetry metric, an opportunity-normalized catch rate defined over ordered (accuser, deceiver) model pairs, computable entirely from data a Mafia simulator already logs for other purposes (Section~IV), requiring no new game mechanic and no additional model calls.
+\item We implement it as an open, game-agnostic command-line tool (\texttt{mafia\_sim deception-matrix}) that recomputes the full matrix from logged game transcripts in well under a second, so the analysis stays current as new games accumulate rather than requiring a bespoke run.
+\item We report preliminary results from nine real games spanning up to fifteen distinct model vendors, including a full pairwise catch-rate matrix and per-model aggregate detectability rankings (Section~VI), and we explicitly position this against the closest prior work (Section~II-D) to make clear what is and is not incrementally new here.
+\item We discuss the confounds, principally the entanglement of deception success with conversational engagement, that limit the causal strength of the current results, and lay out four concrete, already-instrumented next steps to address them (Section~VIII).
+\end{enumerate}
+
+\textit{Scope note:} This is a working technical report, not a peer-reviewed publication. Sample sizes are small ($n=9$ games); we treat the results as directional throughout and say so explicitly wherever the data does not support a stronger claim, rather than overstating significance to make the contribution appear more settled than it is.
 
 \section{Related Work}
 
-Werewolf and Mafia have both been used as LLM-agent testbeds. Xu \textit{et al.} conduct an early empirical study of LLMs playing Werewolf \cite{xu2023exploring}, and a companion line of work trains Werewolf agents with reinforcement learning for strategic play \cite{xu2024language}. Eckhaus \textit{et al.} study a single asynchronous LLM agent embedded among human Mafia players, focusing on when to speak rather than what to say, and release a 33-game human--AI Mafia corpus \cite{eckhaus2025time}. Zhang \textit{et al.} propose DVM, a reinforcement-learning framework that lets a single agent's Werewolf proficiency be tuned to a target win rate \cite{zhang2025dvm}. Song \textit{et al.} introduce a two-stage, human-data-grounded evaluation of LLM social deduction play across five social-ability dimensions, finding that roughly half of evaluated models score below 0.50 on strategy alignment with winning human play \cite{song2025beyond}. Mittal studies multi-hop theory of mind by adding a Jester role to Werewolf \cite{mittal2026triadic}. Feng \textit{et al.} survey the broader space of LLM-based social agents in game-theoretic scenarios, cataloguing memory, persuasion, and coalition-formation techniques \cite{feng2024survey}. Outside LLM agents specifically, Ibraheem \textit{et al.} and de Ruiter and Kachergis both study deception detection directly from Mafia text, the latter releasing the MafiaScum human-play corpus \cite{ibraheem2022putting,deruiter2018mafiascum}, and Bakhtin \textit{et al.} combine language models with strategic planning for the related game of Diplomacy \cite{bakhtin2022human}.
+\subsection{Social Deduction Games as LLM Testbeds}
 
-Across this body of work, we find no study that seats more than one or two distinct model families against each other in the same social deduction game, and none that reports a pairwise, per-model-pair deception or detection rate. Our contribution is orthogonal to and compatible with all of the above: it is an analysis layer, not a new agent architecture, and could in principle be applied to any of these systems' logs if ballots or accusations were recorded per-model.
+Werewolf and Mafia have both been used as LLM-agent testbeds. Xu \textit{et al.} conduct an early empirical study of LLMs playing Werewolf, characterizing failure modes in strategy and persuasion when prompted directly \cite{xu2023exploring}, and a companion line of work by Xu \textit{et al.} instead trains Werewolf agents end-to-end with reinforcement learning for strategic play \cite{xu2024language}. Light \textit{et al.} and Wang \textit{et al.} study the related deduction game Avalon, the former evaluating off-the-shelf LLMs' tactical play \cite{light2023text} and the latter proposing a recursive-contemplation prompting scheme aimed specifically at countering in-game deception \cite{wang2023avalon}. Eckhaus \textit{et al.} study a single asynchronous LLM agent embedded among human Mafia players, focusing on when to speak rather than what to say, and release a 33-game human--AI Mafia corpus \cite{eckhaus2025time}. Zhang \textit{et al.} propose DVM, a reinforcement-learning framework that lets a single agent's Werewolf proficiency be dynamically tuned to a target win rate \cite{zhang2025dvm}. Song \textit{et al.} introduce a two-stage, human-data-grounded evaluation of LLM social deduction play across five social-ability dimensions, finding that roughly half of evaluated models score below 0.50 on strategy alignment with winning human play \cite{song2025beyond}. Mittal studies multi-hop theory of mind by adding a Jester role, whose win condition is orthogonal to both factions, to Werewolf \cite{mittal2026triadic}.
+
+\subsection{Multi-Agent LLM Systems and Simulation}
+
+Beyond games specifically, Park \textit{et al.} demonstrate that populations of LLM agents can sustain believable, emergent social behavior in an open-ended simulated town, establishing much of the architectural template (memory, planning, reflection) that later game-playing agents, including MafiaSim's own private-memory and suspicion-tracking features, draw on \cite{park2023generative}. Du \textit{et al.} show that having multiple LLM instances debate and critique each other's answers improves factuality and reasoning even when every instance is the same underlying model \cite{du2023debate}, a result whose logic (heterogeneous perspectives improve group reasoning) is suggestive for, but never tested against, genuinely heterogeneous multi-vendor debate. Neuberger \textit{et al.} contribute SAUCE, an infrastructure layer for orchestrating both synchronous and asynchronous multi-agent LLM conversations, of which MafiaSim's own open-floor discussion mechanic is a specialized instance \cite{neuberger2024sauce}. Guertler \textit{et al.} release TextArena, a broader competitive text-game platform for LLM agents that Werewolf-style games are a natural fit for \cite{guertler2025textarena}. At larger scale, Bakhtin \textit{et al.} combine language generation with explicit strategic planning to reach human-level play in Diplomacy, a seven-player game of alliance, betrayal, and negotiation with no single omniscient narrator \cite{bakhtin2022human}, the closest large-scale precedent to a multi-agent LLM system where deception is load-bearing to the win condition itself rather than incidental to it.
+
+\subsection{Theory of Mind and Deception in LLMs}
+
+A separate literature asks whether LLMs represent other agents' beliefs at all, independent of any game. Kosinski reports that GPT-family models solve a majority of classic false-belief theory-of-mind tasks \cite{kosinski2023theory}, while Ullman shows that this apparent competence is brittle: trivial perturbations to the same task templates, which do not change the underlying reasoning required, collapse performance \cite{ullman2023large}. Park \textit{et al.} survey documented cases of AI systems, including LLMs, engaging in strategic deception across a range of settings, and argue that deception capability is likely to outpace targeted mitigations absent dedicated evaluation infrastructure \cite{park2023aideception}, a call this paper's deception-asymmetry framework is a narrow, empirical instance of answering for one concrete environment. Outside LLM agents specifically, Ibraheem \textit{et al.} and de Ruiter and Kachergis both study deception detection directly from Mafia text produced by human players, the latter releasing the MafiaScum human-play corpus that much of the classical (pre-LLM) Mafia deception-detection literature is built on \cite{ibraheem2022putting,deruiter2018mafiascum}.
+
+\subsection{Positioning Relative to Prior Work}
+
+Table~\ref{tab:positioning} summarizes the comparison directly. Across the body of work surveyed above, we find no study that seats more than one or two distinct model families against each other in the same social deduction game, and none that reports a pairwise, per-model-pair deception or detection rate rather than an aggregate win rate or a human-alignment score. The incremental contribution of this paper relative to that literature is therefore not a new agent architecture, a new prompting strategy, or a new dataset in the usual sense; it is the observation that a genuinely heterogeneous multi-vendor roster (already a byproduct of MafiaSim's leaderboard design, not built for this purpose) plus a mechanic that already logs secret ballots for spectator replay (also a pre-existing feature, built for a different reason) together are sufficient to compute a class of result, pairwise cross-vendor deception asymmetry, that no prior single-model-family or human-in-the-loop study could produce even in principle, because that class of result is only defined when at least two distinct, identifiable model families are both present in the same game and their per-round choices are individually attributable. Our contribution is consequently best understood as an analysis layer, not a new agent architecture: it is orthogonal to and compatible with every system surveyed above, and could in principle be applied to any of their logs if ballots or accusations were recorded per-model rather than only in aggregate.
+
+\begin{table}[t]
+\centering
+\caption{Positioning Relative to the Closest Prior Work}
+\label{tab:positioning}
+\small
+\begin{tabular}{@{}p{1.7cm}p{1.15cm}p{1.05cm}p{1.15cm}p{1.15cm}@{}}
+\toprule
+Work & Distinct vendors/ game & Pairwise deception rate & Secret ballots & Post hoc, zero extra calls \\
+\midrule
+Eckhaus \textit{et al.} \cite{eckhaus2025time}     & 1 (+human) & No & No & No \\
+Zhang \textit{et al.} \cite{zhang2025dvm}          & 1          & No & No & No \\
+Song \textit{et al.} \cite{song2025beyond}         & $\leq$2    & No & No & No \\
+Mittal \cite{mittal2026triadic}                    & 1          & No & No & No \\
+Bakhtin \textit{et al.} \cite{bakhtin2022human}    & 1          & No & N/A & No \\
+\textbf{This work}                                 & \textbf{up to 15} & \textbf{Yes} & \textbf{Yes} & \textbf{Yes} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{The MafiaSim Environment}
 
-MafiaSim assigns each of $n$ players one of four roles (mafia, detective, doctor, villager) in a ratio following common Mafia convention (roughly one mafia per three to four players). Each night, mafia members privately coordinate a kill; the doctor privately protects one player; the detective privately learns one player's exact role. Each day, all living players discuss in an open, turn-polled floor, then cast a ballot to eliminate one player. Ties trigger a public ``showdown'' (a one-speech defense from each tied player) followed by a revote among the tied set.
+MafiaSim is a Mafia (Werewolf) simulator that connects to each vendor's API directly through provider-specific HTTP adapters, rather than through a single unifying SDK, so that no single vendor's request or response conventions become the implicit lingua franca every other model is silently normalized toward. It assigns each of $n$ players one of four roles (mafia, detective, doctor, villager) in a ratio following common Mafia convention (roughly one mafia per three to four players). Each night, mafia members privately coordinate a kill by majority vote among themselves; the doctor privately protects one player, including possibly themselves; the detective privately learns one player's exact role, not merely their team. Each day, all living players discuss in an open, turn-polled floor rather than a fixed speaking order, a player is given priority whenever another player addresses them by name, then cast a secret ballot to eliminate one player. A tie at the top of the ballot triggers a public ``showdown'': the tied players each get exactly one turn to make their case, after which the table revotes among only the tied set, repeating until the tie breaks or a round limit is reached.
 
-Two properties of the environment are load-bearing for this study. First, votes are a secret ballot: the identity behind each vote is written only to a spectator-only log, never surfaced to any player's own prompt. Because players cannot observe who voted for whom, the deception-asymmetry analysis in this paper is purely observational and post hoc: no player could have adapted its play to the fact that this analysis would later be run on the ballots, which is precisely the property that gives the metric ecological validity as a measure of real gameplay rather than of gaming an observed metric. Second, seat assignment is vendor-diverse by construction: MafiaSim samples one model per distinct company wherever the roster has enough companies to cover every seat, falling back to an even round-robin only when it does not. At the time of the games analyzed here, the roster spanned Anthropic, OpenAI, Google, xAI, Mistral, DeepSeek, Meta, Alibaba, Cohere, Moonshot, and Zhipu; it has since been expanded to fifteen enabled vendors, discussed further in Section~VII.
+Beyond the core loop, three engineering properties of MafiaSim are directly relevant to how the analysis in this paper should be read. First, private state is genuinely private: each player's system prompt is rebuilt per call from only that player's own role, its own team's history if it has one, and a private memory the player itself chooses to write and update turn over turn (a free-text note plus a structured per-player suspicion tracker); nothing routes between players except what is logged to the public transcript. Second, spend is bounded and measured, not estimated after the fact: a hard per-game cost cap is checked between phases so a single expensive day cannot run away, and every provider's own reported per-call cost, where available, is accumulated per model, which is what makes it possible to say precisely how much the games underlying this paper's Table~\ref{tab:pairwise} cost to produce ($\$4.83$ across the full 9-game corpus at the time of analysis, unrelated to the deception metric itself but a byproduct of the same instrumentation). Third, the system is explicitly tuned for multi-vendor robustness rather than single-vendor performance: retries distinguish a genuinely malformed model response from a transient provider-routing failure, and the roster has, over the course of operating it, had specific models disabled for measured reasons (excessive cost share, empty completions from reasoning-token starvation, near-duplicate repeated messages) rather than simply added and left unmonitored, a maintenance posture that matters for interpreting Section~VII-C's roster non-stationarity discussion.
+
+Two further properties are load-bearing specifically for this study. First, votes are a secret ballot: the identity behind each vote is written only to a spectator-only log, never surfaced to any player's own prompt, mirroring the norm in most real-world Mafia play that the outcome of a vote is public but the ballot itself is not. Because players cannot observe who voted for whom, the deception-asymmetry analysis in this paper is purely observational and post hoc: no player could have adapted its play to the fact that this analysis would later be run on the ballots, which is precisely the property that gives the metric ecological validity as a measure of real gameplay rather than of gaming an observed metric. Second, seat assignment is vendor-diverse by construction: MafiaSim samples one model per distinct company wherever the roster has enough companies to cover every seat, falling back to an even round-robin only when it does not. At the time of the games analyzed here, the roster spanned Anthropic, OpenAI, Google, xAI, Mistral, DeepSeek, Meta, Alibaba, Cohere, Moonshot, and Zhipu; it has since been expanded to fifteen enabled vendors, discussed further in Section~VII-C.
 
 \section{Methodology}
 
@@ -68,7 +112,35 @@ Opportunities and catches are attributed to model keys, not seats, and summed ac
 \mathrm{CatchRate}(a,d) &= \mathrm{Catch}(a,d) \,/\, \mathrm{Opp}(a,d) \notag
 \end{align}
 
-$\mathrm{CatchRate}(a,d)$ is accuser model $a$'s detection rate against deceiver model $d$ specifically; $1-\mathrm{CatchRate}(a,d)$ is $d$'s deception success rate against that specific accuser. The full framework is implemented as a pure function over already-serialized game JSON (Fig.~\ref{fig:pipeline}) and ships as a CLI subcommand, \texttt{mafia\_sim deception-matrix}, that recomputes the matrix from every logged game on demand.
+$\mathrm{CatchRate}(a,d)$ is accuser model $a$'s detection rate against deceiver model $d$ specifically; $1-\mathrm{CatchRate}(a,d)$ is $d$'s deception success rate against that specific accuser. Algorithm~\ref{alg:matrix} gives the exact aggregation procedure; it is a single linear pass over every logged game's vote rounds, with no dependency between games, so it is embarrassingly parallel and, in practice, recomputes the full matrix from every game logged so far in well under a second on a laptop. The full framework is implemented as a pure function over already-serialized game JSON (Fig.~\ref{fig:pipeline}) and ships as a CLI subcommand, \texttt{mafia\_sim deception-matrix}, that recomputes the matrix from every logged game on demand, with an optional \texttt{--min-opportunities} threshold to suppress pairs too sparse to be informative.
+
+\begin{algorithm}[t]
+\caption{Cross-Vendor Deception-Asymmetry Matrix}
+\label{alg:matrix}
+\begin{algorithmic}[1]
+\Require Logged games $G$, each with per-round ballots and each player's $(\mathrm{seat}, \mathrm{role}, \mathrm{model})$
+\Ensure Matrix $C$ mapping $(a,d) \mapsto (\mathrm{Opp}, \mathrm{Catch})$
+\State $C \gets \{\}$ \Comment{empty dict, default $(0,0)$}
+\For{each game $g \in G$}
+  \State $P \gets$ seat-to-player map for $g$
+  \For{each vote round $(D, \mathrm{votes}) \in g.\mathrm{day\_votes}$}
+    \State $\mathit{Maf} \gets \{p \in P : p.\mathrm{role} = \textsc{mafia} \wedge \mathrm{alive\_at}(p, D)\}$
+    \If{$\mathit{Maf} = \emptyset$} \textbf{continue} \EndIf
+    \For{each $(v, t) \in \mathrm{votes}$} \Comment{voter, target}
+      \If{$P[v].\mathrm{role} = \textsc{mafia}$} \textbf{continue} \EndIf
+      \For{each $m \in \mathit{Maf} \setminus \{v\}$}
+        \State $a \gets P[v].\mathrm{model}$; \, $d \gets P[m].\mathrm{model}$
+        \State $C[a,d].\mathrm{Opp} \gets C[a,d].\mathrm{Opp} + 1$
+        \If{$t = m$}
+          \State $C[a,d].\mathrm{Catch} \gets C[a,d].\mathrm{Catch} + 1$
+        \EndIf
+      \EndFor
+    \EndFor
+  \EndFor
+\EndFor
+\State \Return $C$
+\end{algorithmic}
+\end{algorithm}
 
 \begin{figure}[t]
 \centering
@@ -489,6 +561,24 @@ We introduced a cross-vendor deception-asymmetry framework for multi-agent LLM s
 \bibitem{deruiter2018mafiascum} B. de Ruiter and G. Kachergis, ``The MafiaScum dataset: A large text corpus for deception detection,'' \textit{arXiv:1811.07851}, 2018.
 
 \bibitem{bakhtin2022human} A. Bakhtin, N. Brown, E. Dinan, G. Farina, C. Flaherty, D. Fried, A. Goff, J. Gray, H. Hu, A. P. Jacob, M. Komeili, K. Konath, M. Kwon, A. Lerer, M. Lewis, A. H. Miller, S. Mitts, A. Renduchintala, S. Roller, \textit{et al.}, ``Human-level play in the game of diplomacy by combining language models with strategic reasoning,'' \textit{Science}, vol. 378, pp. 1067--1074, 2022.
+
+\bibitem{light2023text} J. Light, M. Cai, S. Shen, and Z. Hu, ``From text to tactic: Evaluating LLMs playing the game of Avalon,'' \textit{arXiv:2310.05036}, 2023.
+
+\bibitem{wang2023avalon} S. Wang, C. Liu, Z. Zheng, S. Qi, S. Chen, Q. Yang, A. Zhao, C. Wang, S. Song, and G. Huang, ``Avalon's game of thoughts: Battle against deception through recursive contemplation,'' \textit{arXiv:2310.01320}, 2023.
+
+\bibitem{park2023generative} J. S. Park, J. C. O'Brien, C. J. Cai, M. R. Morris, P. Liang, and M. S. Bernstein, ``Generative agents: Interactive simulacra of human behavior,'' \textit{arXiv:2304.03442}, 2023.
+
+\bibitem{du2023debate} Y. Du, S. Li, A. Torralba, J. B. Tenenbaum, and I. Mordatch, ``Improving factuality and reasoning in language models through multiagent debate,'' \textit{arXiv:2305.14325}, 2023.
+
+\bibitem{neuberger2024sauce} S. Neuberger, N. Eckhaus, U. Berger, A. Taubenfeld, G. Stanovsky, and A. Goldstein, ``SAUCE: Synchronous and asynchronous user-customizable environment for multi-agent LLM interaction,'' \textit{arXiv:2411.03397}, 2024.
+
+\bibitem{guertler2025textarena} L. Guertler, B. Cheng, S. Yu, B. Liu, L. Choshen, and C. Tan, ``TextArena,'' \textit{arXiv:2504.11442}, 2025.
+
+\bibitem{kosinski2023theory} M. Kosinski, ``Evaluating large language models in theory of mind tasks,'' \textit{arXiv:2302.02083}, 2023.
+
+\bibitem{ullman2023large} T. Ullman, ``Large language models fail on trivial alterations to theory-of-mind tasks,'' \textit{arXiv:2302.08399}, 2023.
+
+\bibitem{park2023aideception} P. S. Park, S. Goldstein, A. O'Gara, M. Chen, and D. Hendrycks, ``AI deception: A survey of examples, risks, and potential solutions,'' \textit{arXiv:2308.14752}, 2023.
 
 \end{thebibliography}
 
