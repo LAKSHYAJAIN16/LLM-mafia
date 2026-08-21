@@ -10,6 +10,8 @@ import yaml
 from dotenv import load_dotenv
 
 from .providers.factory import load_runnable_roster
+from .sim.deception_matrix import compute_deception_matrix
+from .sim.deception_matrix import render_markdown_table as render_deception_matrix
 from .sim.html_report import render_game_html
 from .sim.leaderboard import compute_leaderboard, render_markdown_table
 from .sim.logger import ResultsLogger
@@ -118,6 +120,21 @@ def cmd_leaderboard(args: argparse.Namespace) -> None:
     print(render_markdown_table(stats))
 
 
+def cmd_deception_matrix(args: argparse.Namespace) -> None:
+    games_dir = os.path.join(args.results, "games")
+    paths = sorted(glob.glob(os.path.join(games_dir, "*.json")))
+    if not paths:
+        print(f"no games found in {games_dir} -- run some games first")
+        return
+    games = []
+    for p in paths:
+        with open(p, "r", encoding="utf-8") as f:
+            games.append(json.load(f))
+    matrix = compute_deception_matrix(games)
+    print(f"Cross-vendor deception-asymmetry matrix, built from {len(games)} logged game(s):\n")
+    print(render_deception_matrix(matrix, min_opportunities=args.min_opportunities))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mafia_sim", description="LLM Mafia game simulator")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -139,6 +156,16 @@ def build_parser() -> argparse.ArgumentParser:
     lb_p = sub.add_parser("leaderboard", help="print the leaderboard computed from logged results")
     lb_p.add_argument("--results", default=DEFAULT_RESULTS_DIR)
     lb_p.set_defaults(func=cmd_leaderboard)
+
+    dm_p = sub.add_parser(
+        "deception-matrix",
+        help="print the cross-vendor deception-asymmetry matrix (which models fool which)",
+    )
+    dm_p.add_argument("--results", default=DEFAULT_RESULTS_DIR)
+    dm_p.add_argument(
+        "--min-opportunities", type=int, default=1, help="hide accuser/deceiver pairs with fewer data points"
+    )
+    dm_p.set_defaults(func=cmd_deception_matrix)
 
     view_p = sub.add_parser("view", help="(re)generate the HTML replay viewer for a logged game")
     view_p.add_argument("--game", help="game_id, e.g. game_0000_20260101T000000Z")

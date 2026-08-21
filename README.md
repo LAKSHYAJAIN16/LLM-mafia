@@ -66,6 +66,12 @@ python -m mafia_sim.cli run --games 50 --players 8
 # print the leaderboard from whatever's in results/ so far
 python -m mafia_sim.cli leaderboard
 
+# cross-vendor deception-asymmetry matrix: for every (accuser model, mafia model)
+# pair, how often does the accuser actually catch that specific model as mafia?
+# built from every logged game's secret ballots -- no new games required to update it.
+python -m mafia_sim.cli deception-matrix
+python -m mafia_sim.cli deception-matrix --min-opportunities 10  # hide noisy low-data pairs
+
 # (re)generate the HTML replay viewer for a past game, or list game ids
 python -m mafia_sim.cli view --list
 python -m mafia_sim.cli view --game game_0000_20260101T000000Z
