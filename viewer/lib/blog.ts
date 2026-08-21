@@ -18,6 +18,18 @@ export type BlogPost = {
 
 export const POSTS: BlogPost[] = [
   {
+    slug: "cross-vendor-deception-matrix",
+    date: "2026-08-20",
+    title: "The cross-vendor deception-asymmetry matrix",
+    summary: "Every published LLM Werewolf/Mafia paper runs one model family against itself. MafiaSim's many-vendor roster lets us ask a question nobody else can: does model A have a systematic blind spot against model B's deception style specifically?",
+    commits: [{ hash: "7fdfdcc", message: "Add the cross-vendor deception-asymmetry matrix" }],
+    body: [
+      "Surveyed the current literature on LLM social-deduction agents (Time to Talk, DVM, Beyond Survival, a broad LLM-in-game-theory survey, Triadic Werewolf) looking for a genuinely novel angle rather than porting another paper's feature wholesale. The gap: every one of them runs a single model family against itself or against humans. MafiaSim already runs 15 distinct vendors against each other in the same game -- real, unexplored territory nobody's published on.",
+      "The question: does a given model family have a systematic blind spot against a specific *other* family's deception style -- not just a lower aggregate skill? Built entirely from data already being logged (day_votes' secret ballots, plus each player's role and model, both already saved per game) -- no new gameplay mechanic, no extra API calls. For every (accuser model, mafia model) pair across every logged game: how many times was that mafia model a legal vote target for that accuser while genuinely mafia (\"opportunities\"), and how many of those did the accuser actually vote for them (\"catches\")? catches/opportunities is the accuser's detection rate against that specific deceiver; 1 minus it is that deceiver's deception success rate against that specific accuser.",
+      "Shipped as a new `mafia_sim deception-matrix` CLI command (`--min-opportunities` to filter noisy low-data pairs). Already produces real, if early, output from the 9 games logged so far -- e.g. deepseek-chat-or only caught qwen-2.5-72b-or as mafia 19% of the time across 16 real opportunities. Sample sizes are still small; the tooling and methodology are the actual deliverable here, ready to fill in as more games accumulate.",
+    ],
+  },
+  {
     slug: "encoding-fix-and-suspicion-tracking",
     date: "2026-08-20",
     title: "A real crash fix, structured suspicion tracking, and prompt caching",
