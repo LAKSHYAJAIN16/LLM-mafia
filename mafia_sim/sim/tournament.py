@@ -4,7 +4,6 @@ import random
 
 from ..agents.player_agent import PlayerAgent
 from ..game.engine import GameEngine, GameResult
-from ..game.prompts import PERSONA_TRAITS
 from ..game.roles import build_role_setup
 from ..game.state import GameState, LogEntry, Player
 from ..providers.base import ChatProvider
@@ -60,16 +59,10 @@ def setup_game(
     random.shuffle(role_pool)
 
     seats = [f"Player{i + 1}" for i in range(player_count)]
-    # One persona per seat, no repeats until the pool is exhausted (then reshuffles) --
-    # keeps every seat's voice distinct all game, most valuable exactly when two seats
-    # share an underlying model and would otherwise tend to converge on similar phrasing.
-    personas = (PERSONA_TRAITS * (player_count // len(PERSONA_TRAITS) + 1))[:player_count]
-    random.shuffle(personas)
-
     players: list[Player] = []
     agents: dict[str, PlayerAgent] = {}
-    for seat, model_key, role, persona in zip(seats, chosen, role_pool, personas):
-        players.append(Player(seat=seat, model_key=model_key, role=role, persona=persona))
+    for seat, model_key, role in zip(seats, chosen, role_pool):
+        players.append(Player(seat=seat, model_key=model_key, role=role))
         spec, provider = roster[model_key]
         agents[seat] = PlayerAgent(spec, provider, rules)
 

@@ -74,18 +74,6 @@ def test_mafia_system_prompt_includes_their_own_night_chat_history():
     assert "Let's go with Player3, low risk pick." not in villager_text
 
 
-def test_system_prompt_includes_persona_when_assigned():
-    with_persona = Player(seat="Player1", model_key="m", role=Role.VILLAGER, persona="dry and a little sarcastic")
-    without_persona = Player(seat="Player2", model_key="m", role=Role.VILLAGER)
-    state = GameState(players=[with_persona, without_persona])
-
-    text_with = prompts.build_system_prompt(state, with_persona)
-    text_without = prompts.build_system_prompt(state, without_persona)
-
-    assert "dry and a little sarcastic" in text_with
-    assert "natural conversational style" not in text_without
-
-
 def test_detective_gets_a_claim_nudge_only_once_they_have_an_actual_result():
     detective = Player(seat="Player1", model_key="m", role=Role.DETECTIVE)
     villager = Player(seat="Player2", model_key="m", role=Role.VILLAGER, private_notes=["some note"])

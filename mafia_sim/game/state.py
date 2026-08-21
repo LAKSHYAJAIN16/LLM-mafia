@@ -16,7 +16,6 @@ class Player:
     death_cause: str | None = None  # "voted_out" | "killed" | None
     private_notes: list[str] = field(default_factory=list)
     investigated: dict[str, str] = field(default_factory=dict)  # detective only: seat -> role already learned
-    persona: str = ""  # a stable conversational-style trait, assigned once at setup (see prompts.PERSONA_TRAITS)
 
 
 @dataclass

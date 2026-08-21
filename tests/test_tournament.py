@@ -58,19 +58,6 @@ def test_setup_game_uses_vendor_diverse_roster():
     assert len(vendors) == len(set(vendors))
 
 
-def test_setup_game_assigns_a_distinct_persona_per_seat_until_the_pool_runs_out():
-    from mafia_sim.game.prompts import PERSONA_TRAITS
-
-    roster = _roster({f"vendor{i}": 1 for i in range(6)})
-    state, _agents = setup_game(
-        roster, player_count=6, role_setups={6: {"mafia": 1, "detective": 1, "doctor": 1}}, rules=RULES
-    )
-
-    personas = [p.persona for p in state.players]
-    assert all(persona in PERSONA_TRAITS for persona in personas)
-    assert len(set(personas)) == 6  # 6 players, 6 available traits -- no repeats yet
-
-
 def test_setup_game_never_samples_the_excluded_summarizer_key():
     vendor_counts = {f"vendor{i}": 1 for i in range(8)}
     roster = _roster(vendor_counts)
