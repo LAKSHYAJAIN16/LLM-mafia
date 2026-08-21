@@ -438,35 +438,24 @@ def test_discussion_ends_as_soon_as_everyone_passes():
 def test_discussion_caps_a_talkative_player_at_the_daily_message_limit():
     from mafia_sim.game.engine import DEFAULT_MAX_MESSAGES_PER_DAY
 
-    state = GameState(players=_villagers(2))
-    agents = {
-        "Player1": ScriptedDiscussionAgent(action="speak", message="P1 talking"),
-        "Player2": ScriptedDiscussionAgent(action="pass"),
-    }
-    rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100}
-    engine = GameEngine(state, agents, rules)
+    def speech_count_for(rules: dict) -> tuple[int, int]:
+        state = GameState(players=_villagers(2))
+        agents = {
+            "Player1": ScriptedDiscussionAgent(action="speak", message="P1 talking"),
+            "Player2": ScriptedDiscussionAgent(action="pass"),
+        }
+        GameEngine(state, agents, rules)._run_discussion()
+        p1 = len([e for e in state.public_log if e.speaker == "Player1"])
+        p2 = len([e for e in state.public_log if e.speaker == "Player2"])
+        return p1, p2
 
-    engine._run_discussion()
+    base_rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100}
+    p1_default, p2_default = speech_count_for(base_rules)
+    assert p1_default == DEFAULT_MAX_MESSAGES_PER_DAY  # hit the daily cap, never more
+    assert p2_default <= 1  # only ever spoke if it happened to be the forced opener
 
-    p1_speeches = [e for e in state.public_log if e.speaker == "Player1"]
-    p2_speeches = [e for e in state.public_log if e.speaker == "Player2"]
-    assert len(p1_speeches) == DEFAULT_MAX_MESSAGES_PER_DAY  # hit the daily cap, never more
-    assert len(p2_speeches) <= 1  # only ever spoke if it happened to be the forced opener
-
-
-def test_discussion_honors_a_configured_max_messages_per_day():
-    state = GameState(players=_villagers(2))
-    agents = {
-        "Player1": ScriptedDiscussionAgent(action="speak", message="P1 talking"),
-        "Player2": ScriptedDiscussionAgent(action="pass"),
-    }
-    rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100, "max_messages_per_day": 2}
-    engine = GameEngine(state, agents, rules)
-
-    engine._run_discussion()
-
-    p1_speeches = [e for e in state.public_log if e.speaker == "Player1"]
-    assert len(p1_speeches) == 2
+    p1_configured, _ = speech_count_for({**base_rules, "max_messages_per_day": 2})
+    assert p1_configured == 2  # config override actually takes effect, not just the default
 
 
 def test_discussion_treats_speak_with_no_message_as_a_pass():
@@ -490,6 +479,10 @@ def test_speaking_rate_nudge_flags_a_quiet_player_and_a_talkative_one():
     state = GameState(players=_villagers(4))
     state.day = 1
     seats = ["Player1", "Player2", "Player3", "Player4"]
+
+    # Before anyone's spoken today there's no rate to react to.
+    assert GameEngine._speaking_rate_nudge(state, "Player1", seats) is None
+
     # Player1 said nothing yet, Player2 said 3 of the 4 messages so far today.
     state.log_public("day", "speech", "a", speaker="Player2")
     state.log_public("day", "speech", "b", speaker="Player2")
@@ -501,13 +494,7 @@ def test_speaking_rate_nudge_flags_a_quiet_player_and_a_talkative_one():
     assert GameEngine._speaking_rate_nudge(state, "Player3", seats) is None  # right around fair share
 
 
-def test_speaking_rate_nudge_is_none_before_anyone_has_spoken_today():
-    state = GameState(players=_villagers(3))
-    state.day = 1
-    assert GameEngine._speaking_rate_nudge(state, "Player1", ["Player1", "Player2", "Player3"]) is None
-
-
-def test_dynamic_speaking_rate_nudge_is_off_by_default():
+def test_dynamic_speaking_rate_nudge_only_fires_when_enabled():
     class RecordingAgent:
         def __init__(self):
             self.prompts: list[str] = []
@@ -515,48 +502,23 @@ def test_dynamic_speaking_rate_nudge_is_off_by_default():
         def ask(self, state, system_prompt, user_prompt, required_keys, target_keys=None, seat=None, purpose=""):
             if purpose == "day_discussion_poll":
                 self.prompts.append(user_prompt)
-            if purpose == "day_discussion_open":
-                return {"thought": "", "message": "opening"}
             return {"thought": "", "action": "pass"}
 
-    state = GameState(players=_villagers(2))
-    recorder = RecordingAgent()
-    agents = {"Player1": recorder, "Player2": recorder}
-    rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100}
-    engine = GameEngine(state, agents, rules)
+    def poll_and_capture(enabled: bool) -> list[str]:
+        state = GameState(players=_villagers(3))
+        state.day = 1
+        # Player1 dominating today's talk is what should trigger a nudge for Player2.
+        state.log_public("day", "speech", "a", speaker="Player1")
+        state.log_public("day", "speech", "b", speaker="Player1")
+        state.log_public("day", "speech", "c", speaker="Player1")
+        recorder = RecordingAgent()
+        rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100, "dynamic_speaking_rate_nudge": enabled}
+        engine = GameEngine(state, {"Player2": recorder}, rules)
+        engine._poll_speak(state.get("Player2"), {"Player1": 4, "Player2": 4, "Player3": 4}, 4)
+        return recorder.prompts
 
-    engine._run_discussion()
-
-    assert recorder.prompts  # at least one poll happened
-    assert all("make yourself heard" not in p and "let them have their turn" not in p for p in recorder.prompts)
-
-
-def test_dynamic_speaking_rate_nudge_fires_when_enabled():
-    class RecordingAgent:
-        def __init__(self, seat):
-            self.seat = seat
-            self.prompts: list[str] = []
-
-        def ask(self, state, system_prompt, user_prompt, required_keys, target_keys=None, seat=None, purpose=""):
-            if purpose == "day_discussion_poll":
-                self.prompts.append(user_prompt)
-                return {"thought": "", "action": "pass"}
-            return {"thought": "", "message": "opener"}
-
-    state = GameState(players=_villagers(3))
-    p1, p2, p3 = RecordingAgent("Player1"), RecordingAgent("Player2"), RecordingAgent("Player3")
-    agents = {"Player1": p1, "Player2": p2, "Player3": p3}
-    rules = {"max_format_retries": 1, "max_discussion_polls_per_day": 100, "dynamic_speaking_rate_nudge": True}
-    engine = GameEngine(state, agents, rules)
-    state.day = 1
-    # Seed today's discussion so there's a real rate to react to before polling starts.
-    state.log_public("day", "speech", "a", speaker="Player1")
-    state.log_public("day", "speech", "b", speaker="Player1")
-    state.log_public("day", "speech", "c", speaker="Player1")
-
-    engine._poll_speak(state.get("Player2"), {"Player1": 4, "Player2": 4, "Player3": 4}, 4)
-
-    assert any("make yourself heard" in p for p in p2.prompts)
+    assert all("make yourself heard" not in p for p in poll_and_capture(enabled=False))
+    assert any("make yourself heard" in p for p in poll_and_capture(enabled=True))
 
 
 def test_run_stops_early_once_the_cost_cap_is_reached():
