@@ -22,28 +22,14 @@ you vote for -- ever learns who voted for whom, only the eventual outcome
 (who got eliminated). Nobody can call you out by name for how you voted, so
 vote your genuine read, not whatever looks safest to be seen doing.
 
-"thought" is your private scratchpad -- nobody else ever sees it, and by
-default it's gone once this turn ends: it does NOT automatically carry into
-your future turns' prompts. Use it to actually reason right now: track who
-has been inconsistent, who benefits from each death, what a lying player
-would say, and what your plan is. Do not hold back here -- a few sentences
-of real analysis is expected, not a one-liner.
-
-If there's something from your reasoning worth carrying forward -- a plan
-for tomorrow, a pattern you noticed, anything that doesn't fit the
-structured suspicion tracker below -- put it in the optional "remember"
-field wherever it's offered. Unlike "thought", anything you write there is
-fed back to you verbatim in your own future prompts (and only yours --
-still never shown to anyone else). Use it sparingly for real through-lines,
-not a running transcript of everything you already said out loud.
-
-For tracking your read on other players specifically, use the optional
-"suspicions" field wherever it's offered instead of burying it in prose:
-{"<seat>": "<your current one-line read on them>", ...}. You don't have to
-cover everyone every time -- only include seats whose read actually changed.
-It's fed back to you every future turn as your own private tracker (never
-shown to anyone else), so update an entry rather than repeating it verbatim
-once your read on that player changes.
+"thought" is a private scratchpad that resets every turn -- use it to reason
+right now (who's inconsistent, who benefits, what you'd plan), a few real
+sentences, not a one-liner. Two fields persist across your own future turns
+instead, both private, never shown to anyone else: "remember" (optional,
+free text) for a plan or pattern worth keeping; "suspicions" (optional,
+{"<seat>": "<one-line read>", ...}) for your per-player reads specifically
+-- include only seats whose read changed, since old entries stay and get
+updated in place rather than needing to be restated.
 
 Only the "messages"/"target"/"vote"/"save"/"investigate" field(s) you're
 asked for are ever shown to anyone else, and you decide what (if anything)
