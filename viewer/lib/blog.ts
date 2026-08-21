@@ -18,6 +18,20 @@ export type BlogPost = {
 
 export const POSTS: BlogPost[] = [
   {
+    slug: "detective-memory-and-persona-traits",
+    date: "2026-08-20",
+    title: "Two bugs caught live: a forgetful detective, and an echo-loop between duplicate seats",
+    summary: "A detective re-investigated the same known target three nights running, and two same-model seats converged on near-identical phrasing that read as suspicious coordination.",
+    commits: [
+      { hash: "c24dbe4", message: "Stop the detective from re-investigating an already-known target" },
+      { hash: "26efa3f", message: "Give each seat a stable persona trait to reduce cross-model phrasing convergence" },
+    ],
+    body: [
+      "Watched a 12-player game where the detective investigated the same already-confirmed seat three nights in a row instead of ever learning anything new -- structurally wasting its entire information advantage for the whole game. Player gained a real investigated dict (seat -> role already known); the night detective loop now excludes already-known seats from its candidate list whenever a fresh target still exists, the same structural pattern already used to block self-votes.",
+      "Separately, the same game had two seats both running Mistral Large (duplicated because a 12-player game exceeds the roster's ~10-11 distinct vendors). They repeated near-identical phrasing five times in a row, which the rest of the table read as suspicious coordination -- purely a shared-model quirk, not real signal. Each seat now gets one of 8 stable persona traits (blunt, warm and inquisitive, dry and sarcastic, methodical, etc.), assigned once at setup with no repeats until the pool runs out, injected as an explicit instruction not to converge on other players' phrasing.",
+    ],
+  },
+  {
     slug: "detective-claim-nudge-and-message-cap-revert",
     date: "2026-08-20",
     title: "A detective claim nudge, and undoing an over-tightened message cap",
