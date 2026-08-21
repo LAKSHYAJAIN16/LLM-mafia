@@ -3,6 +3,22 @@ from __future__ import annotations
 from .roles import Role
 from .state import GameState, Player
 
+# Assigned once per player at game setup (see sim/tournament.py:setup_game) and kept
+# stable all game -- gives every seat a distinct conversational anchor, independent of
+# which model is behind it. Mitigates a real observed failure mode: two seats running
+# the same underlying model can converge on near-identical phrasing (read by other
+# players as suspicious "coordination" even though it's just a shared model quirk).
+PERSONA_TRAITS = [
+    "blunt and to the point -- short sentences, no hedging",
+    "warm and inquisitive -- asks a lot of questions before committing to a read",
+    "dry and a little sarcastic",
+    "methodical -- lays out reasoning step by step before landing on a conclusion",
+    "impatient -- pushes the conversation toward a decision quickly",
+    "cautious and soft-spoken -- qualifies claims, avoids overstating certainty",
+    "confident and assertive -- states reads as fact, rarely hedges",
+    "wry and observational -- notices small inconsistencies others skip",
+]
+
 RULES_BLOCK = """You are playing Mafia (aka Werewolf), a social deduction game.
 
 Roles:
@@ -51,6 +67,13 @@ JSON_ONLY_NOTE = "Respond with ONLY a single JSON object, no other text, matchin
 def build_system_prompt(state: GameState, player: Player) -> str:
     lines = [RULES_BLOCK]
     lines.append(f"You are {player.seat}. Your secret role is: {player.role.value}.")
+    if player.persona:
+        lines.append(
+            f"Your natural conversational style is {player.persona}. Let that come "
+            "through in how you phrase things, publicly and in private notes -- don't "
+            "converge on the same phrasing other players use, even when you agree with "
+            "their point."
+        )
 
     if player.role == Role.MAFIA:
         teammates = [p for p in state.players if p.role == Role.MAFIA and p.seat != player.seat]
