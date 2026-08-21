@@ -62,6 +62,22 @@ class PlayerAgent:
         if isinstance(note, str) and note.strip():
             state.get(seat).private_notes.append(f"(Day {state.day}, your own note) {note.strip()}")
 
+    def _maybe_track_suspicions(self, state: GameState, seat: str | None, resolved: dict) -> None:
+        """Structured sibling to _maybe_remember: a per-seat suspicion tracker instead
+        of free-form prose, so a player's read on others persists as discrete updatable
+        entries (fed back via build_system_prompt) rather than needing to be re-derived
+        from scratch, or restated, every turn.
+        """
+        if not seat:
+            return
+        updates = resolved.get("suspicions")
+        if not isinstance(updates, dict):
+            return
+        tracker = state.get(seat).suspicions
+        for target_seat, read in updates.items():
+            if isinstance(target_seat, str) and isinstance(read, str) and target_seat.strip() and read.strip():
+                tracker[target_seat.strip()] = read.strip()
+
     def _track_cost(self, state: GameState, resp) -> None:
         cost = resp.cost_usd
         if not cost and (self.spec.price_per_1m_input or self.spec.price_per_1m_output):
@@ -146,6 +162,7 @@ class PlayerAgent:
                 continue
 
             self._maybe_remember(state, seat, resolved)
+            self._maybe_track_suspicions(state, seat, resolved)
             return resolved
 
         state.note_format_failure(self.spec.key)

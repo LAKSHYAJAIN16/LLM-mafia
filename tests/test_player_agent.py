@@ -91,6 +91,44 @@ def test_ask_carries_an_optional_remember_note_into_the_players_private_notes():
     assert "Day 2" in notes[0]
 
 
+def test_ask_tracks_and_updates_structured_suspicions():
+    import json
+
+    from mafia_sim.providers.base import ProviderResponse
+
+    class ScriptedSuspicionProvider:
+        def __init__(self, replies):
+            self.replies = list(replies)
+
+        def complete(self, system_prompt, user_prompt, temperature=0.9, max_tokens=500, timeout=60):
+            return ProviderResponse(text=json.dumps(self.replies.pop(0)))
+
+    provider = ScriptedSuspicionProvider(
+        [
+            {"vote": "Player2", "suspicions": {"Player2": "high -- fabricated a quote"}},
+            {"vote": "Player3", "suspicions": {"Player2": "cleared -- explanation checked out", "Player3": "high"}},
+        ]
+    )
+    spec = ModelSpec(key="m", display_name="m", provider="mock", model_id="x", vendor="mock")
+    agent = PlayerAgent(spec, provider, RULES)
+    state = GameState(players=[Player(seat="Player1", model_key="m", role=Role.VILLAGER)])
+
+    for _ in range(2):
+        agent.ask(
+            state,
+            "system text",
+            "user text",
+            required_keys=["vote"],
+            target_keys={"vote": ["Player1", "Player2", "Player3"]},
+            seat="Player1",
+            purpose="day_vote",
+        )
+
+    tracker = state.get("Player1").suspicions
+    assert tracker["Player2"] == "cleared -- explanation checked out"  # updated, not duplicated
+    assert tracker["Player3"] == "high"
+
+
 def test_ask_ignores_a_blank_or_missing_remember_field():
     import json
 

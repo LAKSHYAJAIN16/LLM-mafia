@@ -29,13 +29,21 @@ has been inconsistent, who benefits from each death, what a lying player
 would say, and what your plan is. Do not hold back here -- a few sentences
 of real analysis is expected, not a one-liner.
 
-If there's something from your reasoning worth carrying forward -- a
-suspicion you want to track, a plan for tomorrow, a pattern you noticed --
-put it in the optional "remember" field wherever it's offered. Unlike
-"thought", anything you write there is fed back to you verbatim in your own
-future prompts (and only yours -- still never shown to anyone else). Use it
-sparingly for real through-lines, not a running transcript of everything you
-already said out loud.
+If there's something from your reasoning worth carrying forward -- a plan
+for tomorrow, a pattern you noticed, anything that doesn't fit the
+structured suspicion tracker below -- put it in the optional "remember"
+field wherever it's offered. Unlike "thought", anything you write there is
+fed back to you verbatim in your own future prompts (and only yours --
+still never shown to anyone else). Use it sparingly for real through-lines,
+not a running transcript of everything you already said out loud.
+
+For tracking your read on other players specifically, use the optional
+"suspicions" field wherever it's offered instead of burying it in prose:
+{"<seat>": "<your current one-line read on them>", ...}. You don't have to
+cover everyone every time -- only include seats whose read actually changed.
+It's fed back to you every future turn as your own private tracker (never
+shown to anyone else), so update an entry rather than repeating it verbatim
+once your read on that player changes.
 
 Only the "messages"/"target"/"vote"/"save"/"investigate" field(s) you're
 asked for are ever shown to anyone else, and you decide what (if anything)
@@ -100,6 +108,11 @@ def build_system_prompt(state: GameState, player: Player) -> str:
         lines.append("Your private notes carried over from earlier in the game:")
         lines.extend(f"- {n}" for n in player.private_notes)
 
+    live_suspicions = {s: r for s, r in player.suspicions.items() if s in {p.seat for p in state.alive_players()}}
+    if live_suspicions:
+        lines.append("Your suspicion tracker so far (update entries as your read changes):")
+        lines.extend(f"- {seat}: {read}" for seat, read in live_suspicions.items())
+
     return "\n".join(lines)
 
 
@@ -117,7 +130,8 @@ def build_day_discussion_open_prompt(state: GameState) -> str:
         "Send one message to kick off the conversation.\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", '
         '"message": "<one short public message>", '
-        '"remember": "<optional: a short private note carried into your future turns, or omit>"}'
+        '"remember": "<optional: a short private note carried into your future turns, or omit>", '
+        '"suspicions": {"<optional: seat>": "<your current one-line read on them>"}}'
     )
 
 
@@ -163,7 +177,8 @@ def build_day_discussion_poll_prompt(
         f'{JSON_ONLY_NOTE}{{"thought": "<brief one-line gut check>", '
         '"action": "speak" | "think" | "pass", '
         '"message": "<exactly one short public message -- only if action is \'speak\', omit or leave empty otherwise>", '
-        '"remember": "<optional: a short private note carried into your future turns, or omit>"}'
+        '"remember": "<optional: a short private note carried into your future turns, or omit>", '
+        '"suspicions": {"<optional: seat>": "<your current one-line read on them>"}}'
     )
 
 
@@ -175,7 +190,8 @@ def build_day_vote_prompt(state: GameState, player: Player) -> str:
         "This ballot is secret -- nobody will ever see who you voted for, only the "
         "outcome -- so vote your real read, not whatever looks safest.\n"
         f'{JSON_ONLY_NOTE}{{"thought": "<your real private analysis: a few sentences>", "vote": "<exact player name>", '
-        '"remember": "<optional: a short private note carried into your future turns, or omit>"}}'
+        '"remember": "<optional: a short private note carried into your future turns, or omit>", '
+        '"suspicions": {"<optional: seat>": "<your current one-line read on them>"}}'
     )
 
 

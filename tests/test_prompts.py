@@ -89,6 +89,22 @@ def test_mafia_system_prompt_includes_their_own_night_chat_history():
     assert "Let's go with Player3, low risk pick." not in villager_text
 
 
+def test_suspicions_field_offered_and_rendered_for_alive_players_only():
+    p1 = Player(seat="Player1", model_key="m", role=Role.VILLAGER)
+    p2 = Player(seat="Player2", model_key="m", role=Role.VILLAGER, alive=False, death_day=1, death_cause="killed")
+    p3 = Player(seat="Player3", model_key="m", role=Role.VILLAGER)
+    p1.suspicions = {"Player2": "was cleared before dying", "Player3": "high -- keeps deflecting"}
+    state = GameState(players=[p1, p2, p3])
+
+    assert '"suspicions"' in prompts.build_day_discussion_open_prompt(state)
+    assert '"suspicions"' in prompts.build_day_discussion_poll_prompt(state, 3, 5)
+    assert '"suspicions"' in prompts.build_day_vote_prompt(state, p1)
+
+    text = prompts.build_system_prompt(state, p1)
+    assert "Player3: high -- keeps deflecting" in text
+    assert "Player2" not in text.split("suspicion tracker")[-1]  # dead player's entry dropped from the render
+
+
 def test_detective_gets_a_claim_nudge_only_once_they_have_an_actual_result():
     detective = Player(seat="Player1", model_key="m", role=Role.DETECTIVE)
     villager = Player(seat="Player2", model_key="m", role=Role.VILLAGER, private_notes=["some note"])
