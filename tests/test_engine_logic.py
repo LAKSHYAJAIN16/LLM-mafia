@@ -179,6 +179,46 @@ class _FixedNightAgent:
         return reply
 
 
+def test_detective_never_repeats_an_already_known_investigation():
+    players = [
+        Player(seat="Player1", model_key="m", role=Role.MAFIA),
+        Player(seat="Player2", model_key="m", role=Role.DETECTIVE),
+        Player(seat="Player3", model_key="m", role=Role.VILLAGER),
+        Player(seat="Player4", model_key="m", role=Role.VILLAGER),
+        Player(seat="Player5", model_key="m", role=Role.VILLAGER),
+    ]
+    state = GameState(players=players)
+    state.day = 1
+
+    class RecordingDetectiveAgent:
+        def __init__(self):
+            self.seen_candidates: list[list[str]] = []
+
+        def ask(self, state, system_prompt, user_prompt, required_keys, target_keys=None, seat=None, purpose=""):
+            reply = {"thought": "", "messages": ["ok"]}
+            if "investigate" in required_keys:
+                candidates = target_keys["investigate"]
+                self.seen_candidates.append(list(candidates))
+                reply["investigate"] = candidates[0]
+            return reply
+
+    detective_agent = RecordingDetectiveAgent()
+    agents = {"Player1": _FixedNightAgent("Player3"), "Player2": detective_agent}
+    rules = {"max_format_retries": 1, "reveal_role_on_death": False}
+    engine = GameEngine(state, agents, rules)
+
+    engine._run_night()  # night 1 -- investigates Player1 (first candidate), kills Player3
+    state.day = 2
+    engine._run_night()  # night 2 -- Player1 should now be excluded as already-known
+
+    first_pick = state.get("Player2").investigated
+    assert "Player1" in first_pick  # recorded from night 1
+
+    night1_candidates, night2_candidates = detective_agent.seen_candidates
+    assert "Player1" in night1_candidates
+    assert "Player1" not in night2_candidates  # already known -- excluded while a fresh target exists
+
+
 def test_doctor_gets_private_feedback_when_a_save_blocks_an_attack():
     players = [
         Player(seat="Player1", model_key="m", role=Role.MAFIA),

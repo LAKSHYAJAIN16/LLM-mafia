@@ -206,7 +206,13 @@ class GameEngine:
                     state.log_reveal("night", p.seat, f"{p.seat} protected {doctor_save}. No attack landed on them.")
 
         for p in state.alive_by_role(Role.DETECTIVE):
-            candidates = [s.seat for s in state.alive_players() if s.seat != p.seat]
+            all_others = [s.seat for s in state.alive_players() if s.seat != p.seat]
+            # Investigating someone whose role is already known is strictly wasted --
+            # exclude already-investigated seats whenever a fresh target still exists
+            # (observed for real: a detective re-investigated the same already-known
+            # seat three nights running instead of ever learning anything new).
+            fresh = [s for s in all_others if s not in p.investigated]
+            candidates = fresh or all_others
             if not candidates:
                 continue
             reply = self.agents[p.seat].ask(
@@ -222,6 +228,7 @@ class GameEngine:
             target_seat = reply.get("investigate")
             if target_seat:
                 role = state.get(target_seat).role.value
+                p.investigated[target_seat] = role
                 p.private_notes.append(
                     f"Night {state.day}: you investigated {target_seat} -- they are {role}. You now know this."
                 )
