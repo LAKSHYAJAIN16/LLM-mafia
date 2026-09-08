@@ -9,8 +9,9 @@ import sys
 import yaml
 from dotenv import load_dotenv
 
-from .providers.factory import load_runnable_roster
-from .sim.deception_matrix import compute_deception_matrix
+from .providers.factory import filter_roster_by_vendor, load_runnable_roster
+from .sim.deception_matrix import compute_deception_matrix, hint_table
+from .sim.deception_matrix import render_aggregate_table as render_deception_aggregate
 from .sim.deception_matrix import render_markdown_table as render_deception_matrix
 from .sim.html_report import render_game_html
 from .sim.leaderboard import compute_leaderboard, render_markdown_table
@@ -46,6 +47,21 @@ def _print_event(entry) -> None:
         print(f"[Day {entry.day}] {entry.text}")
 
 
+def _load_deception_hints(results_dir: str, min_opportunities: int) -> dict[tuple[str, str], tuple[float, int]]:
+    """Aggregates whatever games are already logged under results_dir into a hint table.
+    Called once, before a new tournament starts, so hints only ever reflect prior games --
+    never the game currently being played.
+    """
+    games_dir = os.path.join(results_dir, "games")
+    paths = sorted(glob.glob(os.path.join(games_dir, "*.json")))
+    games = []
+    for p in paths:
+        with open(p, "r", encoding="utf-8") as f:
+            games.append(json.load(f))
+    matrix = compute_deception_matrix(games)
+    return hint_table(matrix, min_opportunities=min_opportunities)
+
+
 def cmd_run(args: argparse.Namespace) -> None:
     load_dotenv()
     rules = load_rules(args.rules)
@@ -59,7 +75,18 @@ def cmd_run(args: argparse.Namespace) -> None:
         mock_spec = ModelSpec(key="mock-random", display_name="Mock", provider="mock", model_id="mock-random")
         roster = {"mock-random": (mock_spec, build_provider(mock_spec))}
 
+    if args.vendor:
+        roster = filter_roster_by_vendor(roster, args.vendor)
+        if not roster:
+            print(f"[run] no enabled models found for vendor '{args.vendor}' -- aborting")
+            return
+
     print(f"[run] roster: {', '.join(roster.keys())}")
+
+    deception_hints: dict[tuple[str, str], tuple[float, int]] = {}
+    if rules.get("opponent_aware_deception"):
+        deception_hints = _load_deception_hints(args.out, rules.get("opponent_aware_min_opportunities", 5))
+        print(f"[run] opponent-aware deception ON -- {len(deception_hints)} accuser/deceiver pair(s) with hints")
 
     logger = ResultsLogger(args.out)
     running_total = {"cost": 0.0}
@@ -84,6 +111,7 @@ def cmd_run(args: argparse.Namespace) -> None:
         logger=logger,
         on_game_done=on_done,
         on_event=None if args.quiet else _print_event,
+        deception_hints=deception_hints,
     )
     print(f"[run] done. Results in {args.out}/. Total spend: ${running_total['cost']:.4f}")
 
@@ -132,7 +160,10 @@ def cmd_deception_matrix(args: argparse.Namespace) -> None:
             games.append(json.load(f))
     matrix = compute_deception_matrix(games)
     print(f"Cross-vendor deception-asymmetry matrix, built from {len(games)} logged game(s):\n")
-    print(render_deception_matrix(matrix, min_opportunities=args.min_opportunities))
+    if args.aggregate:
+        print(render_deception_aggregate(matrix))
+    else:
+        print(render_deception_matrix(matrix, min_opportunities=args.min_opportunities))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -151,6 +182,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument(
         "--quiet", action="store_true", help="suppress live turn-by-turn output (recommended for big tournaments)"
     )
+    run_p.add_argument(
+        "--vendor",
+        default=None,
+        help="restrict the roster to a single vendor (e.g. 'anthropic') for a same-vendor control game",
+    )
     run_p.set_defaults(func=cmd_run)
 
     lb_p = sub.add_parser("leaderboard", help="print the leaderboard computed from logged results")
@@ -164,6 +200,11 @@ def build_parser() -> argparse.ArgumentParser:
     dm_p.add_argument("--results", default=DEFAULT_RESULTS_DIR)
     dm_p.add_argument(
         "--min-opportunities", type=int, default=1, help="hide accuser/deceiver pairs with fewer data points"
+    )
+    dm_p.add_argument(
+        "--aggregate",
+        action="store_true",
+        help="print per-deceiver aggregate detectability (summed over all accusers) instead of the pairwise table",
     )
     dm_p.set_defaults(func=cmd_deception_matrix)
 

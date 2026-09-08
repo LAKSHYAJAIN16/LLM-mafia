@@ -1,6 +1,6 @@
 from collections import Counter
 
-from mafia_sim.providers.factory import ModelSpec, build_provider
+from mafia_sim.providers.factory import ModelSpec, build_provider, filter_roster_by_vendor
 from mafia_sim.sim.tournament import _sample_model_keys, setup_game
 
 ROLE_SETUPS = {8: {"mafia": 2, "detective": 1, "doctor": 1}}
@@ -56,6 +56,45 @@ def test_setup_game_uses_vendor_diverse_roster():
     state, _agents = setup_game(roster, player_count=8, role_setups=ROLE_SETUPS, rules=RULES)
     vendors = [roster[p.model_key][0].vendor for p in state.players]
     assert len(vendors) == len(set(vendors))
+
+
+def test_setup_game_defaults_to_empty_deception_hints():
+    roster = _roster({f"vendor{i}": 1 for i in range(8)})
+    state, _agents = setup_game(roster, player_count=8, role_setups=ROLE_SETUPS, rules=RULES)
+    assert state.deception_hints == {}
+
+
+def test_setup_game_threads_deception_hints_onto_state():
+    roster = _roster({f"vendor{i}": 1 for i in range(8)})
+    hints = {("vendor0-0", "vendor1-0"): (0.25, 8)}
+    state, _agents = setup_game(
+        roster, player_count=8, role_setups=ROLE_SETUPS, rules=RULES, deception_hints=hints
+    )
+    assert state.deception_hints == hints
+
+
+def test_filter_roster_by_vendor_keeps_only_matching_vendor():
+    roster = _roster({"anthropic": 2, "openai": 1})
+
+    filtered = filter_roster_by_vendor(roster, "anthropic")
+
+    assert set(filtered.keys()) == {"anthropic-0", "anthropic-1"}
+    assert all(spec.vendor == "anthropic" for spec, _provider in filtered.values())
+
+
+def test_filter_roster_by_vendor_produces_a_same_vendor_control_game():
+    roster = _roster({"anthropic": 2, "openai": 1})
+    filtered = filter_roster_by_vendor(roster, "anthropic")
+
+    state, _agents = setup_game(
+        filtered,
+        player_count=4,
+        role_setups={4: {"mafia": 1, "detective": 0, "doctor": 0}},
+        rules=RULES,
+    )
+
+    vendors = {filtered[p.model_key][0].vendor for p in state.players}
+    assert vendors == {"anthropic"}
 
 
 def test_setup_game_never_samples_the_excluded_summarizer_key():

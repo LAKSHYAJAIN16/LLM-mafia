@@ -78,6 +78,22 @@ def build_system_prompt(state: GameState, player: Player) -> str:
             )
             lines.append(mafia_chat)
 
+        if state.deception_hints:
+            opponent_reads = []
+            for p in state.alive_players():
+                if p.role == Role.MAFIA or p.seat == player.seat:
+                    continue
+                entry = state.deception_hints.get((p.model_key, player.model_key))
+                if entry:
+                    rate, n = entry
+                    opponent_reads.append(f"- {p.seat}: has caught players like you {rate:.0%} of the time in past games (n={n})")
+            if opponent_reads:
+                lines.append(
+                    "Opponent read, from past games' logged voting patterns (small samples -- "
+                    "use as one input alongside this game's actual events, not gospel):"
+                )
+                lines.extend(opponent_reads)
+
     if player.role == Role.DETECTIVE and player.private_notes:
         lines.append(
             "As detective, your investigation results are worthless to town if you "

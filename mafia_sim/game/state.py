@@ -40,6 +40,11 @@ class GameState:
     day: int = 0
     _seq: int = field(default=0, repr=False, compare=False)
     day_votes: list[dict] = field(default_factory=list)  # [{day, round, votes: {voter: target}}]
+    # (accuser_model_key, deceiver_model_key) -> (catch_rate, opportunities), computed from prior
+    # logged games via sim/deception_matrix.hint_table(). Empty by default -- only populated when
+    # opponent_aware_deception is on, and only read by mafia players in game/prompts.py, so an
+    # empty dict here means prompts are byte-identical to before this field existed.
+    deception_hints: dict[tuple[str, str], tuple[float, int]] = field(default_factory=dict)
     format_failures: dict[str, int] = field(default_factory=dict)  # model_key -> count
     cost_usd: dict[str, float] = field(default_factory=dict)  # model_key -> accumulated $ spend
     transcript_full_detail_days: int = 3  # older "speech" entries are dropped to bound prompt growth

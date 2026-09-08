@@ -122,6 +122,45 @@ def test_detective_gets_a_claim_nudge_only_once_they_have_an_actual_result():
     assert "worthless to town" not in prompts.build_system_prompt(state, villager)
 
 
+def test_deception_hints_absent_by_default_leaves_prompt_unchanged():
+    players = [
+        Player(seat="Player1", model_key="m", role=Role.MAFIA),
+        Player(seat="Player2", model_key="m2", role=Role.VILLAGER),
+    ]
+    state = GameState(players=players)  # deception_hints defaults to {}
+
+    text = prompts.build_system_prompt(state, players[0])
+
+    assert "Opponent read" not in text
+
+
+def test_deception_hints_shown_to_mafia_only_for_alive_non_mafia_opponents():
+    mafia = Player(seat="Player1", model_key="deceiver-model", role=Role.MAFIA)
+    accuser_alive = Player(seat="Player2", model_key="accuser-model", role=Role.VILLAGER)
+    accuser_dead = Player(
+        seat="Player3", model_key="dead-accuser-model", role=Role.VILLAGER, alive=False, death_day=1
+    )
+    teammate = Player(seat="Player4", model_key="teammate-model", role=Role.MAFIA)
+    state = GameState(
+        players=[mafia, accuser_alive, accuser_dead, teammate],
+        deception_hints={
+            ("accuser-model", "deceiver-model"): (0.45, 16),
+            ("dead-accuser-model", "deceiver-model"): (0.99, 20),  # dead -- must not appear
+            ("teammate-model", "deceiver-model"): (0.5, 10),  # mafia is never an "accuser" -- must not appear
+        },
+    )
+
+    text = prompts.build_system_prompt(state, mafia)
+    hint_section = text.split("Opponent read")[-1]
+
+    assert "Player2: has caught players like you 45% of the time in past games (n=16)" in hint_section
+    assert "Player3" not in hint_section
+    assert "Player4" not in hint_section
+
+    # A non-mafia player never sees this block at all, even when hints exist.
+    assert "Opponent read" not in prompts.build_system_prompt(state, accuser_alive)
+
+
 def test_mafia_system_prompt_omits_chat_section_before_any_night_has_happened():
     players = [
         Player(seat="Player1", model_key="m", role=Role.MAFIA),

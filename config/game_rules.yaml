@@ -105,3 +105,14 @@ max_tokens: 2000
 showdown_max_tokens: 3000
 max_format_retries: 2           # re-prompt attempts if a model's JSON can't be parsed
 request_timeout_seconds: 60
+
+# Opponent-aware deception: when true, before each tournament run, prior logged games
+# (see sim/deception_matrix.py) are aggregated into a per-(accuser_model, deceiver_model)
+# historical catch rate, and each mafia player is shown, for every currently-alive non-mafia
+# opponent, how often that opponent's model has caught players like them in past games (see
+# game/prompts.py). Off by default so prompts stay byte-identical to before this existed --
+# this is the gate for a clean on/off ablation, not a default behavior change.
+opponent_aware_deception: false
+# Only surface a hint for an (accuser, deceiver) pair with at least this many logged
+# opportunities -- keeps a single unlucky/lucky early game from reading as a confident pattern.
+opponent_aware_min_opportunities: 5

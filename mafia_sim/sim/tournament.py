@@ -48,6 +48,7 @@ def setup_game(
     rules: dict,
     on_event=None,
     exclude_keys: set[str] | None = None,
+    deception_hints: dict[tuple[str, str], tuple[float, int]] | None = None,
 ) -> tuple[GameState, dict[str, PlayerAgent]]:
     playable = {k: v for k, v in roster.items() if k not in (exclude_keys or set())} or roster
     chosen = _sample_model_keys(playable, player_count)
@@ -70,6 +71,7 @@ def setup_game(
         players=players,
         transcript_full_detail_days=rules.get("transcript_full_detail_days", 3),
         on_event=on_event,
+        deception_hints=deception_hints or {},
     )
     return state, agents
 
@@ -83,6 +85,7 @@ def run_tournament(
     logger: ResultsLogger,
     on_game_done=None,
     on_event=None,
+    deception_hints: dict[tuple[str, str], tuple[float, int]] | None = None,
 ) -> list[GameResult]:
     summarizer_key = rules.get("summarizer_model")
     summarizer = roster[summarizer_key][1] if summarizer_key and summarizer_key in roster else None
@@ -97,7 +100,13 @@ def run_tournament(
     results: list[GameResult] = []
     for i in range(num_games):
         state, agents = setup_game(
-            roster, player_count, role_setups, rules, on_event=on_event, exclude_keys=exclude_keys
+            roster,
+            player_count,
+            role_setups,
+            rules,
+            on_event=on_event,
+            exclude_keys=exclude_keys,
+            deception_hints=deception_hints,
         )
 
         if on_event:

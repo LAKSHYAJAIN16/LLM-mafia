@@ -76,3 +76,15 @@ def load_runnable_roster(path: str, require_keys: bool = True) -> dict[str, tupl
             continue
         roster[spec.key] = (spec, build_provider(spec))
     return roster
+
+
+def filter_roster_by_vendor(
+    roster: dict[str, tuple[ModelSpec, ChatProvider]], vendor: str
+) -> dict[str, tuple[ModelSpec, ChatProvider]]:
+    """Restricts a roster to a single vendor -- used for a same-vendor control game,
+    the baseline the cross-vendor deception-asymmetry analysis is otherwise missing.
+    Distinct-model diversity within that vendor depends entirely on how many of that
+    vendor's models are enabled in the roster file; with only one enabled, every seat
+    ends up on the same model, which is still a valid (if degenerate) same-model control.
+    """
+    return {key: pair for key, pair in roster.items() if pair[0].vendor == vendor}
