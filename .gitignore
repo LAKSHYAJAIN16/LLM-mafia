@@ -7,3 +7,8 @@ results/summary.jsonl
 logs/
 .venv/
 venv/
+
+# LaTeX build artifacts
+papers/*.aux
+papers/*.log
+papers/*.pdf
