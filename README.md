@@ -1,61 +1,16 @@
 # MafiaSim
 
-Makes chatbots (Claude, GPT, Gemini, Grok, Mistral, DeepSeek, Llama, Cohere, ...)
-play Mafia/Werewolf against each other, logs full transcripts, and produces a
-leaderboard to see which model is actually best at deception and deduction.
+I wanted to know which LLM is actually best at lying and catching liars, so I built a Mafia (Werewolf) engine that makes chatbots from different companies play against each other. Claude, GPT, Gemini, Grok, Mistral, DeepSeek, Llama, Cohere -- whatever's in the roster -- get thrown into a game, given secret roles, and left to bluff, accuse, and vote each other out. Every game gets fully logged and turned into a leaderboard so I can actually see who's good at this.
 
-## How it works
+## How a game works
 
-- Each model in `config/models.yaml` is a candidate "player." A game samples N
-  of them, assigns seats (`Player1`, `Player2`, ...) and secret roles (mafia /
-  detective / doctor / villager per `config/game_rules.yaml`), and never tells
-  players which underlying model an opponent is -- only their seat name.
-- Every model is tagged with a `vendor` (the company behind it). A game never
-  seats two models from the same vendor together (no Claude-vs-Claude,
-  Gemini-vs-Gemini, etc.) -- it samples one distinct vendor per seat, falling
-  back to an even round-robin only if there aren't enough distinct vendors to
-  fill every seat.
-- Every turn is a single stateless completion call: the model gets the public
-  transcript (and mafia-only chat, if it's mafia) plus its private notes, and
-  must respond with a strict JSON object -- a private `thought` (real, unrestricted
-  reasoning that no other player ever sees) plus whatever public field the
-  phase needs: `message`/`action`, `vote`, `target`, `save`, or `investigate`.
-  Malformed output is retried, then falls back to a random legal action --
-  also tracked as a `format_failures` stat per model.
-- Night phase: mafia privately discuss and pick a kill target by majority
-  vote among themselves; doctor picks someone to protect (and learns whether
-  it mattered); detective learns one player's *exact role* (not just team).
-  Day phase is an open floor, not a fixed speaking order: one random player
-  opens, then every alive player with messages left (max 3/day) gets tapped
-  in turn to decide whether to speak, think privately, or pass -- a real
-  back-and-forth, not everyone forced to talk every round. Then a **secret**
-  ballot (nobody ever learns who voted for whom, only the outcome); a tie at
-  the top triggers a showdown -- the tied players publicly make their case,
-  then everyone revotes among just the tied set, repeating until one player
-  has sole possession of the most votes. Every death is announced to the
-  models simply as "died" -- no "lynched"/"killed" jargon anywhere a model
-  can see it.
-- Results are logged per-game (`results/games/*.json` full transcripts --
-  including every private `thought` and, if a summarizer is configured, each
-  day's digest -- plus `results/games/*.html`, a self-contained replay viewer,
-  and `results/summary.jsonl` compact rows) and aggregated into a leaderboard
-  with win rate (overall / as mafia / as town), a team-based Elo rating, how
-  often a model got caught while lying (mafia) or blamed while innocent
-  (town), format-failure rate, and $ cost (exact, via OpenRouter's live
-  `usage.cost` where available).
+Each model listed in `config/models.yaml` is a candidate player. A game samples N of them, gives them seat names (`Player1`, `Player2`, ...), and assigns secret roles -- mafia, detective, doctor, villager -- per `config/game_rules.yaml`. Nobody ever finds out which underlying model they're up against, only the seat name. I also tag every model with its vendor and never let two models from the same company share a game, so it's a real cross-company matchup instead of, say, Claude quietly playing itself.
 
-## Tech stack
+Every turn is one stateless completion call: the model sees the public transcript (plus mafia-only chat if it's mafia) and its own private notes, and has to answer with strict JSON -- a private `thought` nobody else ever sees, plus whatever the phase needs (a message, a vote, a target to kill/save/investigate). If a model returns garbage JSON I retry it, then fall back to a random legal move and log it as a `format_failures` strike against that model.
 
-- **Engine/CLI**: Python (`mafia_sim/`), stdlib `argparse` for the CLI, `requests`/`PyYAML`/`python-dotenv`
-  for HTTP + config. No async framework or web server -- it's a batch tournament runner.
-- **Providers**: direct SDK-free HTTP calls per vendor (`mafia_sim/providers/`) -- `anthropic_provider.py`,
-  `google_provider.py`, and a shared `openai_compat_provider.py` for every OpenAI-compatible API
-  (OpenAI, xAI, Mistral, DeepSeek, Groq, Together, Cohere-compatible endpoints, and OpenRouter).
-- **Viewer**: the per-game HTML replay is self-contained (no framework, generated by
-  `mafia_sim/sim/html_report.py`); `viewer/` is a separate optional Next.js + React app for browsing
-  all logged games interactively.
-- **Tests**: `pytest`, run entirely against `mafia_sim/providers/mock_provider.py` so no API keys or
-  network calls are needed.
+Nights: mafia privately vote on a kill, the doctor picks someone to protect, the detective learns one player's exact role. Days are an open floor rather than a fixed speaking order -- one random player opens, then everyone alive with turns left gets tapped to decide whether to talk, think privately, or pass. Voting is a secret ballot (nobody ever learns who voted for whom), and ties trigger a showdown where the tied players make their case and everyone revotes among just them until it resolves. Deaths are announced as just "died" -- no "lynched" or "killed" language leaks to the models, since that would give away information they shouldn't have.
+
+Every game gets logged in full -- transcripts, private thoughts, secret ballots, the works -- to `results/games/*.json`, plus a self-contained HTML replay you can open straight in a browser. All of that rolls up into a leaderboard with win rate (overall / as mafia / as town), a team Elo rating, how often a model got caught lying or wrongly blamed, format-failure rate, and actual dollar cost per model (via OpenRouter's live `usage.cost` when it's available).
 
 ## Setup
 
@@ -64,97 +19,50 @@ pip install -r requirements.txt
 cp .env.example .env   # fill in whichever provider keys you have
 ```
 
-Models without a key set are skipped automatically at runtime -- you don't
-need all of them to start.
+You don't need every provider's key -- models without one configured just get skipped automatically at runtime.
 
-## Running
+## Running it
 
 ```
-# single game, using only the free no-key mock player (sanity check)
+# sanity check with the free, no-key mock player
 python -m mafia_sim.cli run --games 1 --players 8 --mock-only
 
-# real run once you've added API keys to .env
+# a real run once .env has keys
 python -m mafia_sim.cli run --games 50 --players 8
 
-# print the leaderboard from whatever's in results/ so far
+# leaderboard from whatever's already in results/
 python -m mafia_sim.cli leaderboard
 
-# cross-vendor deception-asymmetry matrix: for every (accuser model, mafia model)
-# pair, how often does the accuser actually catch that specific model as mafia?
-# built from every logged game's secret ballots -- no new games required to update it.
+# who catches whom: for every (accuser, mafia model) pair, how often does
+# the accuser actually nail that model as mafia -- built from logged ballots,
+# no new games needed
 python -m mafia_sim.cli deception-matrix
-python -m mafia_sim.cli deception-matrix --min-opportunities 10  # hide noisy low-data pairs
+python -m mafia_sim.cli deception-matrix --min-opportunities 10  # drop noisy pairs
 
-# (re)generate the HTML replay viewer for a past game, or list game ids
+# regenerate or list the HTML replay for a past game
 python -m mafia_sim.cli view --list
 python -m mafia_sim.cli view --game game_0000_20260101T000000Z
 ```
 
-`run` streams the game live to the console turn-by-turn by default (pass
-`--quiet` to suppress this for big tournaments). Every finished game also
-gets a self-contained `results/games/<id>.html` replay viewer -- shows the
-full transcript with each player's private `thought` interleaved in true
-chronological order, a spoiler-gated cast/role reveal, and step-through/play
-controls to watch it unfold turn by turn; open it directly in a browser.
+`run` streams the game live to your console (add `--quiet` for big tournaments). Every finished game also gets its own `results/games/<id>.html` replay -- full transcript, private thoughts woven in chronologically, a spoiler-gated role reveal, and play/step controls.
 
-Cost note: each game makes many real API calls (day discussion polls each
-alive player in turn every time it's their tap, plus votes and night
-actions). Start with a small `--games`/`--players` count to gauge cost before
-running a large tournament. Live cost is tracked per model and printed after
-every game (and totaled at the end of a run) whenever the provider reports
-it -- OpenRouter does, via `usage.cost`; the `leaderboard` command also
-breaks down total/avg/per-win cost per model. `config/game_rules.yaml` has
-several things tuned to bound spend:
-- `max_cost_usd: 3.00` -- a hard per-game spending cap, checked between
-  phases and inside the discussion/showdown loops, so one runaway game can't
-  blow past it; the game just ends early as a draw if hit.
-- `max_days: 12` caps the worst case in turns.
-- `discussion_silence_threshold: 6` ends a day's discussion after 6
-  consecutive declines in a row rather than polling every remaining player
-  every time -- the main lever against the open-floor discussion getting
-  expensive on quiet days -- with one floor: nobody alive goes a whole day
-  without at least one turn, even if the room "goes quiet" by this rule first.
-- `transcript_full_detail_days: 5` -- older day-by-day discussion text is
-  dropped from the prompt (deaths stay for the whole game since they're short
-  and strategically important), so prompt size doesn't grow quadratically
-  over a long game. Optionally set `summarizer_model` to a roster key to
-  compress each day into one sentence instead of dropping it outright once it
-  ages out of that window (costs one small extra call/day).
-
-`max_tokens: 2000` gives room for a real private `thought` plus the JSON
-structure around it -- extended-thinking models can consume much of this on
-invisible reasoning tokens before writing anything visible, which is also why
-this shouldn't be set too low (some models will otherwise never manage to
-close their JSON at all).
+Fair warning on cost: a game makes a lot of real API calls (every alive player gets polled each time it's their turn to speak, plus votes and night actions). Start small before running a big tournament. Cost gets printed live per model and totaled at the end whenever the provider reports it -- OpenRouter does. A few knobs in `config/game_rules.yaml` exist specifically to keep spend sane: `max_cost_usd` hard-caps a single game (ends it as a draw if hit), `max_days` bounds the worst case in turns, `discussion_silence_threshold` cuts a day's discussion short after enough consecutive passes, and `transcript_full_detail_days` drops old day-by-day discussion from the prompt so it doesn't grow quadratically over a long game (deaths stay in, since they're short and matter strategically).
 
 ## Editing the roster
 
-`config/models.yaml` is the only place model choice lives -- add, remove, or
-swap `model_id` strings there; no code changes needed. `config/game_rules.yaml`
-controls role ratios, discussion rounds, tie-break policy, and LLM sampling
-params.
+`config/models.yaml` is the only place model choice lives -- add, remove, or swap `model_id` strings, no code changes needed. `config/game_rules.yaml` controls role ratios, discussion rounds, tie-break policy, and sampling params.
 
-### Alternate roster: OpenRouter
-
-`config/models.openrouter.yaml` is a parallel roster covering the same set of
-companies, but every model is routed through [OpenRouter](https://openrouter.ai)
-instead of each provider's own API -- one `OPENROUTER_API_KEY`, one prepaid
-balance, no per-provider billing setup. Use it with `--models`:
+There's also `config/models.openrouter.yaml`, a parallel roster covering the same companies but routed entirely through OpenRouter -- one API key, one prepaid balance, instead of setting up billing with every provider separately:
 
 ```
 python -m mafia_sim.cli run --games 20 --players 8 --models config/models.openrouter.yaml
 ```
 
-The two roster files are independent -- `config/models.yaml` (direct provider
-APIs) is untouched by this and still works on its own once those providers'
-keys have credit.
+The two rosters don't interact -- the direct-provider one still works fine on its own if you'd rather use your own API keys.
 
 ## Viewer
 
-Every finished game gets a self-contained `results/games/<id>.html` replay
-viewer -- open it directly in a browser, no server needed. For a richer,
-interactive UI there's also `viewer/`, a Next.js app that reads the same
-`results/games/*.json` files:
+Every finished game gets that self-contained HTML replay (no server needed, just open it). If you want something more interactive, `viewer/` is a separate Next.js app that reads the same `results/games/*.json` files:
 
 ```
 cd viewer
@@ -162,7 +70,7 @@ npm install
 npm run dev
 ```
 
-See `viewer/README.md` for details.
+See `viewer/README.md` for more on that.
 
 ## Tests
 
@@ -171,5 +79,4 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-Tests run entirely against the mock provider, so they need no API keys and
-cost nothing.
+Tests run against a mock provider, so no API keys and no cost.
