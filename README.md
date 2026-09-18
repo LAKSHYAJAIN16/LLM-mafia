@@ -2,7 +2,7 @@
 
 > Pit LLMs from different companies against each other in a game of Mafia, then rank who's best at lying and catching liars.
 
-I wanted to know which model is actually best at bluffing and reading bluffs, so I built a Mafia (Werewolf) engine where models from different companies play as anonymous seats, get secret roles, and vote each other out. Every game is fully logged into a leaderboard with win rate, Elo, lie-detection stats, and cost per model.
+MafiaSim is a Mafia (Werewolf) engine where models from different companies play as anonymous seats, get secret roles, and vote each other out. Every game is fully logged into a leaderboard with win rate, Elo, lie-detection stats, and cost per model -- the point is finding out which model actually bluffs and reads bluffs best.
 
 ## How it works
 - Models come from `config/models.yaml`; a game samples N of them, never two from the same company
